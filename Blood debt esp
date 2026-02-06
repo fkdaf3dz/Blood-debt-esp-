@@ -1,0 +1,1496 @@
+-- BLOOD DEBT GUI - SECTION 1: Services, Island, Blood FX & Role Data
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+local Camera = workspace.CurrentCamera
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+-- Folders (initialized later to prevent blocking)
+local NPCSFolder = nil
+local BloodFolder = nil
+
+-- Initialize folders asynchronously 
+task.spawn(function()
+    NPCSFolder = Workspace:WaitForChild("NPCSFolder", 10)
+    BloodFolder = Workspace:WaitForChild("BloodFolder", 10)
+end)
+
+local BloodDebt = {}
+BloodDebt.IsOpen = false
+BloodDebt.IsDragging = false
+BloodDebt.DragStart = nil
+BloodDebt.MenuPos = nil
+BloodDebt.NametagMode = "Role"
+BloodDebt.RoleESPEnabled = false
+
+-- ScreenGui
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "BloodDebtFixed"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+ScreenGui.Parent = playerGui
+
+-- BLOOD FX
+local BloodContainer = Instance.new("Frame")
+BloodContainer.Size = UDim2.new(1, 0, 1, 0)
+BloodContainer.BackgroundTransparency = 1
+BloodContainer.Visible = false
+BloodContainer.ZIndex = 1000
+BloodContainer.Parent = ScreenGui
+
+local function createBloodDrop(x, y, size, velocity)
+    local drop = Instance.new("Frame")
+    drop.Size = UDim2.new(0, size, 0, size)
+    drop.Position = UDim2.new(0, x, 0, y)
+    drop.BackgroundColor3 = Color3.fromRGB(180, 0, 0)
+    drop.BorderSizePixel = 0
+    drop.ZIndex = 1000
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0.3, 0)
+    corner.Parent = drop
+    
+    drop.Parent = BloodContainer
+    
+    if velocity then
+        local pos = Vector2.new(x, y)
+        task.spawn(function()
+            for i = 1, 30 do
+                task.wait(0.03)
+                if not drop.Parent then return end
+                pos = pos + velocity * 0.03
+                velocity = velocity + Vector2.new(0, 15)
+                drop.Position = UDim2.new(0, pos.X, 0, pos.Y)
+                drop.Rotation = drop.Rotation + 15
+            end
+            drop:Destroy()
+        end)
+    end
+    return drop
+end
+
+function BloodDebt.PlayBloodExplosion(x, y, count)
+    count = count or 20
+    BloodContainer.Visible = true
+    for i = 1, count do
+        local angle = math.random() * math.pi * 2
+        local speed = math.random(50, 200)
+        local vel = Vector2.new(math.cos(angle) * speed, math.sin(angle) * speed)
+        task.delay(i * 0.01, function()
+            createBloodDrop(x, y, math.random(5, 12), vel)
+        end)
+    end
+    task.delay(1, function() BloodContainer.Visible = false end)
+end
+
+-- WEAPON DATABASES
+local killerWeapons = {
+    ["CharcoalSteel JS-22"] = true, ["Pretty Pink RR-LCP"] = true, ["JS2-BondsDerringy"] = true,
+    ["GILDED"] = true, ["Kamatov"] = true, ["JS2-Derringy"] = true, ["JS-22"] = true,
+    ["RR-LightCompactPistolS"] = true, ["J9-Mereta"] = true, ["RY's GG-17"] = true,
+    ["RR-LCP"] = true, ["JS1-Competitor"] = true, ["AT's KAR15"] = true, ["VK's ANKM"] = true,
+    ["Clothed Sawn-off"] = true, ["Sawn-off"] = true, ["Clothed Rosen-Obrez"] = true,
+    ["Rosen-Obrez"] = true, ["GraySteel K1911"] = true, ["DarkSteel K1911"] = true,
+    ["SilverSteel K1911"] = true, ["K1911"] = true, ["ZZ-90"] = true, ["SKORPION"] = true,
+    ["Mares Leg"] = true, ["RR-LightCompactPistol"] = true, ["KamatovS"] = true,
+    ["ChromeSlide Turqoise RR-LCP"] = true, ["JS1-CYCLOPS"] = true, ["THUMPA"] = true,
+    ["LUT-E 'KRUS'"] = true, ["Memories"] = true, ["Hammer n Bullet"] = true,
+    ["JS-22GILDED"] = true, ["Sawn-offGILDED"] = true, ["Door'bler TIGERSTRIPES"] = true,
+    ["Anatoly's JS-22"] = true, ["PLASTIC JS-22"] = true, ["JTS225-OBREZ"] = true,
+    ["HEARDBALLA"] = true, ["Whiteout Rosen-Obrez"] = true, ["Whiteout RR-LCP"] = true,
+    ["JTS225-Obrez Monochrome"] = true, ["JTS225-Obrez"] = true, ["Sawn-off10"] = true,
+    ["Nikolai's 'Dented'"] = true, ["JS-44"] = true, ["BandagePack"] = true,
+    ["JTS225-Obrez Poly"] = true, ["Mares Leg10"] = true, ["RR-LCP10"] = true,
+    ["JTS225-Obrez Partycannon"] = true, ["Bandages"] = true, ["corrodedmetal JS-22"] = true,
+    ["CharcoalSteel JS-44"] = true, ["SKORPION10"] = true, ["Meretta486Palubu Sawn-Off"] = true,
+    ["KamatovDRUM"] = true, ["Micro KZI"] = true, ["Whiteout RR-LightCompactPistolS"] = true,
+    ["Clothed SKORPION"] = true, ["CharcoalSteel SKORPION"] = true, ["Charcoal Steel SKORPION"] = true,
+    ["Katya's 'Memories'"] = true, ["Dual SKORPS"] = true, ["HWISSH-KP9"] = true,
+    ["JS2-DerringyGILDED"] = true, ["K1911GILDED"] = true, ["Mandols-5"] = true,
+    ["RDG-2B"] = true, ["Testament"] = true, ["Jolibri"] = true, ["JAVELIN-OBREZS"] = true,
+    ["GZhG-7.62"] = true, ["AGM22"] = true, ["RR-Mark2"] = true, ["Dual LCPs"] = true,
+    ["RR-LightCompactPistolS10"] = true, ["Wild Mandols-5"] = true, ["AK47 Case Hardened 1000000"] = true,
+    ["Kensington20"] = true, ["Kensington"] = true, ["ZOZ-106"] = true, ["Whizz"] = true,
+    ["Rosen Nagan"] = true, ["WISP"] = true, ["WISP Pearl"] = true, ["MAK-1020"] = true,
+    ["SKORPION 'AMIRNOV"] = true, ["PTRB-41"] = true, ["Memorial"] = true, ["Mooser"] = true,
+    ["VA's ANKM"] = true, ["HW-K7"] = true, ["TG's JAVELIN-ZVD"] = true, ["KR7S"] = true,
+    ["RUZKH-12"] = true, ["TEKE-9"] = true, ["TG's JTS225"] = true, ["Mason's Machete"] = true,
+    ["Pretty Pink RVK"] = true, ["Comically Large Spoon"] = true, ["Skeleton Rosen-Obrez"] = true,
+    ["Berf-JOLT"] = true, ["1895-Rosey"] = true, ["K1911 'Memorial'"] = true, ["APZ"] = true,
+    ["Door'bler"] = true, ["JTS225-ObrezGILDED"] = true, ["Casaro 91"] = true,
+}
+
+local vigilanteWeapons = {
+    ["Beagle"] = true, ["Beagle TIGERSTRIPES"] = true, ["Paradise Beagle"] = true,
+    ["IZVEKH-412"] = true, ["SilverSteel RR-Snubby"] = true, ["RR-Snubby"] = true,
+    ["ZKZ-Obrez"] = true, ["GG-17"] = true, ["J9-M"] = true, ["J9-Meretta"] = true,
+    ["Pretty Pink GG-17"] = true, ["GG-17 TAN"] = true, ["GG-17GILDED"] = true,
+    ["RR-SnubbyGILDED"] = true, ["HWISSH-226"] = true, ["ZKZ-Obrez10"] = true,
+    ["Buxxberg-COMPACT"] = true, ["Pretty Pink Buxxberg-COMPACT"] = true,
+    ["JS-5A-Obrez"] = true, ["Dual Elites"] = true, ["RR-Snubby10"] = true,
+    ["DRICO"] = true, ["HW-M5K"] = true, ["CharcoalSteel I412"] = true, ["GG-1720"] = true,
+    ["Dual GG-17s"] = true, ["Dual GG 17s"] = true, ["Mini Ranch Rifle"] = true,
+    ["Clothed ZKZ-Obrez"] = true, ["Case Hardened DRICO"] = true,
+}
+
+local specialKillerWeapons = {
+    ["RY's GG-17"] = true, ["AT's KAR15"] = true, ["VK's ANKM"] = true,
+    ["VA's ANKM"] = true, ["RVK"] = true, ["GZhG-7.62"] = true,
+    ["AK47 Case Hardened 1000000"] = true, ["TG's JAVELIN-ZVD"] = true,
+    ["Mason's Machete"] = true, ["Pretty Pink RVK"] = true,
+}
+
+local specificJuggernautWeapons = {
+    ["AK47 Case Hardened 1000000"] = true, ["RVK"] = true, ["Pretty Pink RVK"] = true,
+}
+
+local allRoleWeapons = {}
+for name, _ in pairs(killerWeapons) do allRoleWeapons[name] = true end
+for name, _ in pairs(vigilanteWeapons) do allRoleWeapons[name] = true end
+
+-- ROLE COLORS
+local killerColor = Color3.fromRGB(255, 0, 0)
+local innocentColor = Color3.fromRGB(0, 255, 0)
+local vigilanteColor = Color3.fromRGB(0, 255, 255)
+local hintMatchColor = Color3.new(1, 1, 0)
+local vigilanteHintColor = Color3.fromRGB(128, 0, 128)
+local killerHintColor = Color3.fromRGB(255, 165, 0)
+
+-- STATE VARIABLES
+local stopRoleLoop = false
+local rolesLockedByDistance = false
+local lockedDistanceRoles = {}
+local playersMatchingHints = {}
+local firstVigilanteTracker = {}
+local playersWithStandardKillerWeapons = {}
+local droppedGunConnections = {}
+local distanceThreshold = 30
+local espPlayerAddedConnection = nil
+local espCharacterAddedConnections = {}
+local hintTextConnection = nil
+
+-- Export folders for other sections
+BloodDebt.GetNPCSFolder = function() return NPCSFolder end
+BloodDebt.GetBloodFolder = function() return BloodFolder end
+BloodDebt.KillerWeapons = killerWeapons
+BloodDebt.VigilanteWeapons = vigilanteWeapons
+BloodDebt.SpecialKillerWeapons = specialKillerWeapons
+BloodDebt.SpecificJuggernautWeapons = specificJuggernautWeapons
+BloodDebt.AllRoleWeapons = allRoleWeapons
+
+-- BAT ISLAND
+BloodDebt.Island = Instance.new("TextButton")
+BloodDebt.Island.Size = UDim2.new(0, 55, 0, 55)
+BloodDebt.Island.Position = UDim2.new(0.85, 0, 0.1, 0)
+BloodDebt.Island.BackgroundColor3 = Color3.fromRGB(15, 10, 18)
+BloodDebt.Island.Text = "🦇"
+BloodDebt.Island.TextSize = 28
+BloodDebt.Island.Font = Enum.Font.GothamBold
+BloodDebt.Island.AutoButtonColor = false
+BloodDebt.Island.ZIndex = 100
+
+local ic = Instance.new("UICorner")
+ic.CornerRadius = UDim.new(1, 0)
+ic.Parent = BloodDebt.Island
+
+local shadow = Instance.new("ImageLabel")
+shadow.Size = UDim2.new(1.4, 0, 1.4, 0)
+shadow.Position = UDim2.new(-0.2, 0, -0.2, 0)
+shadow.BackgroundTransparency = 1
+shadow.Image = "rbxassetid://5028857084"
+shadow.ImageColor3 = Color3.fromRGB(0, 0, 0)
+shadow.ImageTransparency = 0.9
+shadow.ZIndex = 99
+shadow.Parent = BloodDebt.Island
+
+BloodDebt.Island.Parent = ScreenGui
+
+local floatTween = nil
+local function startFloating()
+    if floatTween then floatTween:Cancel() end
+    floatTween = TweenService:Create(BloodDebt.Island,
+        TweenInfo.new(2.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
+        {Position = UDim2.new(BloodDebt.Island.Position.X.Scale, BloodDebt.Island.Position.X.Offset, BloodDebt.Island.Position.Y.Scale, BloodDebt.Island.Position.Y.Offset - 5)}
+    )
+    floatTween:Play()
+end
+startFloating()
+
+local dragInput = nil
+local dragStartPos = nil
+local islandStartPos = nil
+
+BloodDebt.Island.InputBegan:Connect(function(input)
+    if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
+    if BloodDebt.IsOpen then return end
+    
+    dragInput = input
+    dragStartPos = input.Position
+    islandStartPos = BloodDebt.Island.Position
+    BloodDebt.IsDragging = false
+    
+    if floatTween then floatTween:Pause() end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if input == dragInput and not BloodDebt.IsOpen then
+        local delta = input.Position - dragStartPos
+        if delta.Magnitude > 3 then
+            BloodDebt.IsDragging = true
+            BloodDebt.Island.Position = UDim2.new(
+                islandStartPos.X.Scale, islandStartPos.X.Offset + delta.X,
+                islandStartPos.Y.Scale, islandStartPos.Y.Offset + delta.Y
+            )
+        end
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input == dragInput and not BloodDebt.IsOpen then
+        dragInput = nil
+        if not BloodDebt.IsDragging then
+            BloodDebt.OpenMenu()
+        else
+            startFloating()
+        end
+        BloodDebt.IsDragging = false
+    end
+end)
+
+BloodDebt.Island.MouseEnter:Connect(function()
+    TweenService:Create(BloodDebt.Island, TweenInfo.new(0.2), {
+        BackgroundColor3 = Color3.fromRGB(139, 0, 0),
+        Size = UDim2.new(0, 60, 0, 60)
+    }):Play()
+    local abs = BloodDebt.Island.AbsolutePosition
+    BloodDebt.PlayBloodExplosion(abs.X + 27, abs.Y + 27, 8)
+end)
+
+BloodDebt.Island.MouseLeave:Connect(function()
+    TweenService:Create(BloodDebt.Island, TweenInfo.new(0.2), {
+        BackgroundColor3 = Color3.fromRGB(15, 10, 18),
+        Size = UDim2.new(0, 55, 0, 55)
+    }):Play()
+end)
+-- BLOOD DEBT GUI - SECTION 2: Blood ESP (UNCHANGED)
+BloodDebt.SkeletonESP = {
+    Enabled = false,
+    ESPs = {}
+}
+
+local function createLine()
+    local line = Drawing.new("Line")
+    line.Color = Color3.new(1, 0, 0)
+    line.Thickness = 3.5
+    line.Transparency = 1
+    line.Visible = false
+    return line
+end
+
+local function createSquare()
+    local sq = Drawing.new("Square")
+    sq.Filled = true
+    sq.Visible = false
+    return sq
+end
+
+function BloodDebt.SkeletonESP.CreateESP(targetPlayer)
+    if targetPlayer == player then return end
+    
+    local esp = {
+        Player = targetPlayer,
+        Lines = {},
+        HealthBG = nil,
+        HealthFill = nil,
+        Connection = nil
+    }
+    
+    for i = 1, 12 do
+        esp.Lines[i] = createLine()
+    end
+    
+    esp.HealthBG = createSquare()
+    esp.HealthBG.Color = Color3.fromRGB(40, 0, 0)
+    esp.HealthBG.Size = Vector2.new(6, 50)
+    
+    esp.HealthFill = createSquare()
+    esp.HealthFill.Color = Color3.fromRGB(255, 0, 0)
+    esp.HealthFill.Size = Vector2.new(4, 48)
+    
+    esp.Connection = RunService.RenderStepped:Connect(function()
+        if not BloodDebt.SkeletonESP.Enabled then
+            for _, line in ipairs(esp.Lines) do line.Visible = false end
+            esp.HealthBG.Visible = false
+            esp.HealthFill.Visible = false
+            return
+        end
+        
+        local character = targetPlayer.Character
+        if not character then
+            for _, line in ipairs(esp.Lines) do line.Visible = false end
+            esp.HealthBG.Visible = false
+            esp.HealthFill.Visible = false
+            return
+        end
+        
+        local humanoid = character:FindFirstChild("Humanoid")
+        if not humanoid or humanoid.Health <= 0 then
+            for _, line in ipairs(esp.Lines) do line.Visible = false end
+            esp.HealthBG.Visible = false
+            esp.HealthFill.Visible = false
+            return
+        end
+        
+        local function getPart(name, altName)
+            return character:FindFirstChild(name) or character:FindFirstChild(altName)
+        end
+        
+        local head = getPart("Head")
+        local root = getPart("HumanoidRootPart")
+        local torso = getPart("UpperTorso", "Torso")
+        
+        if not (head and root) then
+            for _, line in ipairs(esp.Lines) do line.Visible = false end
+            esp.HealthBG.Visible = false
+            esp.HealthFill.Visible = false
+            return
+        end
+        
+        if not torso then torso = root end
+        
+        local headScreen, headVis = Camera:WorldToViewportPoint(head.Position)
+        local torsoScreen, torsoVis = Camera:WorldToViewportPoint(torso.Position)
+        
+        if not (headVis and torsoVis and headScreen.Z > 0 and torsoScreen.Z > 0) then
+            for _, line in ipairs(esp.Lines) do line.Visible = false end
+            esp.HealthBG.Visible = false
+            esp.HealthFill.Visible = false
+            return
+        end
+        
+        if not (headScreen.X == headScreen.X and headScreen.Y == headScreen.Y) then
+            for _, line in ipairs(esp.Lines) do line.Visible = false end
+            esp.HealthBG.Visible = false
+            esp.HealthFill.Visible = false
+            return
+        end
+        
+        local hPos = Vector2.new(headScreen.X, headScreen.Y)
+        local tPos = Vector2.new(torsoScreen.X, torsoScreen.Y)
+        
+        local barHeight = 50
+        local barWidth = 6
+        local healthPercent = math.clamp(humanoid.Health / humanoid.MaxHealth, 0, 1)
+        local fillHeight = math.floor((barHeight - 2) * healthPercent)
+        
+        local barPos = Vector2.new(tPos.X - 25, tPos.Y - barHeight/2)
+        
+        esp.HealthBG.Position = barPos
+        esp.HealthBG.Size = Vector2.new(barWidth, barHeight)
+        esp.HealthBG.Visible = true
+        
+        esp.HealthFill.Position = Vector2.new(barPos.X + 1, barPos.Y + 1 + (barHeight - 2 - fillHeight))
+        esp.HealthFill.Size = Vector2.new(barWidth - 2, fillHeight)
+        
+        if healthPercent > 0.6 then
+            esp.HealthFill.Color = Color3.fromRGB(255, 0, 0)
+        elseif healthPercent > 0.3 then
+            esp.HealthFill.Color = Color3.fromRGB(180, 0, 0)
+        else
+            esp.HealthFill.Color = Color3.fromRGB(120, 0, 0)
+        end
+        
+        esp.HealthFill.Visible = true
+        
+        local function getScreen(part)
+            if not part then return nil end
+            local pos, vis = Camera:WorldToViewportPoint(part.Position)
+            if not vis or pos.Z <= 0 then return nil end
+            if pos.X ~= pos.X or pos.Y ~= pos.Y then return nil end
+            return Vector2.new(pos.X, pos.Y)
+        end
+        
+        local lUpperArm = getScreen(getPart("LeftUpperArm", "Left Arm"))
+        local lLowerArm = getScreen(getPart("LeftLowerArm"))
+        local lHand = getScreen(getPart("LeftHand", "Left Arm"))
+        
+        local rUpperArm = getScreen(getPart("RightUpperArm", "Right Arm"))
+        local rLowerArm = getScreen(getPart("RightLowerArm"))
+        local rHand = getScreen(getPart("RightHand", "Right Arm"))
+        
+        local lUpperLeg = getScreen(getPart("LeftUpperLeg", "Left Leg"))
+        local lLowerLeg = getScreen(getPart("LeftLowerLeg"))
+        local lFoot = getScreen(getPart("LeftFoot", "Left Leg"))
+        
+        local rUpperLeg = getScreen(getPart("RightUpperLeg", "Right Leg"))
+        local rLowerLeg = getScreen(getPart("RightLowerLeg"))
+        local rFoot = getScreen(getPart("RightFoot", "Right Leg"))
+        
+        local function drawLine(idx, from, to)
+            if from and to then
+                esp.Lines[idx].From = from
+                esp.Lines[idx].To = to
+                esp.Lines[idx].Visible = true
+            else
+                esp.Lines[idx].Visible = false
+            end
+        end
+        
+        drawLine(1, hPos, tPos)
+        
+        if lUpperArm then
+            drawLine(2, tPos, lUpperArm)
+            if lLowerArm then
+                drawLine(3, lUpperArm, lLowerArm)
+                drawLine(4, lLowerArm, lHand or lLowerArm)
+            else
+                drawLine(3, lUpperArm, lHand or lUpperArm)
+                esp.Lines[4].Visible = false
+            end
+        else
+            esp.Lines[2].Visible = false
+            esp.Lines[3].Visible = false
+            esp.Lines[4].Visible = false
+        end
+        
+        if rUpperArm then
+            drawLine(5, tPos, rUpperArm)
+            if rLowerArm then
+                drawLine(6, rUpperArm, rLowerArm)
+                drawLine(7, rLowerArm, rHand or rLowerArm)
+            else
+                drawLine(6, rUpperArm, rHand or rUpperArm)
+                esp.Lines[7].Visible = false
+            end
+        else
+            esp.Lines[5].Visible = false
+            esp.Lines[6].Visible = false
+            esp.Lines[7].Visible = false
+        end
+        
+        if lUpperLeg then
+            drawLine(8, tPos, lUpperLeg)
+            if lLowerLeg then
+                drawLine(9, lUpperLeg, lLowerLeg)
+                drawLine(10, lLowerLeg, lFoot or lLowerLeg)
+            else
+                drawLine(9, lUpperLeg, lFoot or lUpperLeg)
+                esp.Lines[10].Visible = false
+            end
+        else
+            esp.Lines[8].Visible = false
+            esp.Lines[9].Visible = false
+            esp.Lines[10].Visible = false
+        end
+        
+        if rUpperLeg then
+            drawLine(11, tPos, rUpperLeg)
+            if rLowerLeg then
+                drawLine(12, rUpperLeg, rLowerLeg)
+            else
+                esp.Lines[12].Visible = false
+            end
+        else
+            esp.Lines[11].Visible = false
+            esp.Lines[12].Visible = false
+        end
+    end)
+    
+    BloodDebt.SkeletonESP.ESPs[targetPlayer] = esp
+end
+
+function BloodDebt.SkeletonESP.Enable()
+    BloodDebt.SkeletonESP.Enabled = true
+    for _, p in ipairs(Players:GetPlayers()) do
+        BloodDebt.SkeletonESP.CreateESP(p)
+    end
+    
+    Players.PlayerAdded:Connect(function(p)
+        task.wait(2)
+        if BloodDebt.SkeletonESP.Enabled then
+            BloodDebt.SkeletonESP.CreateESP(p)
+        end
+    end)
+    
+    Players.PlayerRemoving:Connect(function(p)
+        local esp = BloodDebt.SkeletonESP.ESPs[p]
+        if esp then
+            if esp.Connection then esp.Connection:Disconnect() end
+            for _, line in ipairs(esp.Lines) do
+                line:Remove()
+            end
+            if esp.HealthBG then esp.HealthBG:Remove() end
+            if esp.HealthFill then esp.HealthFill:Remove() end
+            BloodDebt.SkeletonESP.ESPs[p] = nil
+        end
+    end)
+end
+
+function BloodDebt.SkeletonESP.Disable()
+    BloodDebt.SkeletonESP.Enabled = false
+    for _, esp in pairs(BloodDebt.SkeletonESP.ESPs) do
+        if esp.Connection then esp.Connection:Disconnect() end
+        for _, line in ipairs(esp.Lines) do
+            line:Remove()
+        end
+        if esp.HealthBG then esp.HealthBG:Remove() end
+        if esp.HealthFill then esp.HealthFill:Remove() end
+    end
+    BloodDebt.SkeletonESP.ESPs = {}
+end
+-- BLOOD DEBT GUI - SECTION 3: Menu UI with Role Features
+local Menu = Instance.new("Frame")
+Menu.Size = UDim2.new(0, 380, 0, 450)
+Menu.Position = UDim2.new(0.5, -190, 0.5, -225)
+Menu.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+Menu.BorderSizePixel = 0
+Menu.Visible = false
+Menu.ZIndex = 200
+
+local border = Instance.new("Frame")
+border.Size = UDim2.new(1, 6, 1, 6)
+border.Position = UDim2.new(0, -3, 0, -3)
+border.BackgroundColor3 = Color3.fromRGB(139, 0, 0)
+border.ZIndex = 199
+border.Parent = Menu
+
+local borderGrad = Instance.new("UIGradient")
+borderGrad.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(180, 0, 0)),
+    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(80, 0, 0)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(180, 0, 0))
+})
+borderGrad.Rotation = 45
+borderGrad.Parent = border
+
+TweenService:Create(borderGrad, TweenInfo.new(3, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {Rotation = 405}):Play()
+
+local mc = Instance.new("UICorner")
+mc.CornerRadius = UDim.new(0, 16)
+mc.Parent = Menu
+
+local dripContainer = Instance.new("Frame")
+dripContainer.Size = UDim2.new(1, 0, 1, 0)
+dripContainer.BackgroundTransparency = 1
+dripContainer.ZIndex = 201
+dripContainer.Parent = Menu
+
+task.spawn(function()
+    while Menu do
+        task.wait(math.random(0.5, 2))
+        if Menu.Visible then
+            local drip = Instance.new("Frame")
+            drip.Size = UDim2.new(0, 2, 0, 0)
+            drip.Position = UDim2.new(math.random(0.1, 0.9), 0, 0, 0)
+            drip.BackgroundColor3 = Color3.fromRGB(139, 0, 0)
+            drip.BorderSizePixel = 0
+            drip.ZIndex = 201
+            drip.Parent = dripContainer
+            
+            TweenService:Create(drip, TweenInfo.new(math.random(2, 4)), {
+                Size = UDim2.new(0, 2, 0, math.random(20, 60)),
+                Position = UDim2.new(drip.Position.X.Scale, 0, 1, -20),
+                BackgroundTransparency = 0.8
+            }):Play()
+            
+            task.delay(4, function() if drip then drip:Destroy() end end)
+        end
+    end
+end)
+
+local Header = Instance.new("Frame")
+Header.Name = "DragHeader"
+Header.Size = UDim2.new(1, 0, 0, 55)
+Header.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
+Header.BorderSizePixel = 0
+Header.ZIndex = 202
+Header.Parent = Menu
+
+local hc = Instance.new("UICorner")
+hc.CornerRadius = UDim.new(0, 16)
+hc.Parent = Header
+
+local icon = Instance.new("TextLabel")
+icon.Size = UDim2.new(0, 30, 1, 0)
+icon.Position = UDim2.new(0, 15, 0, 0)
+icon.BackgroundTransparency = 1
+icon.Text = "🩸"
+icon.TextSize = 24
+icon.Parent = Header
+
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(0, 150, 1, 0)
+Title.Position = UDim2.new(0, 45, 0, 0)
+Title.BackgroundTransparency = 1
+Title.Text = "Blood Debt"
+Title.TextColor3 = Color3.fromRGB(240, 240, 250)
+Title.TextSize = 20
+Title.Font = Enum.Font.GothamBold
+Title.TextXAlignment = Enum.TextXAlignment.Left
+Title.ZIndex = 203
+Title.Parent = Header
+
+local Close = Instance.new("TextButton")
+Close.Size = UDim2.new(0, 40, 0, 40)
+Close.Position = UDim2.new(1, -50, 0.5, -20)
+Close.BackgroundColor3 = Color3.fromRGB(139, 0, 0)
+Close.Text = "🦇"
+Close.TextSize = 20
+Close.ZIndex = 203
+Close.Parent = Header
+
+local cc = Instance.new("UICorner")
+cc.CornerRadius = UDim.new(0, 12)
+cc.Parent = Close
+
+local TopRow = Instance.new("Frame")
+TopRow.Size = UDim2.new(1, -30, 0, 40)
+TopRow.Position = UDim2.new(0, 15, 0, 65)
+TopRow.BackgroundTransparency = 1
+TopRow.ZIndex = 202
+TopRow.Parent = Menu
+
+local PlayersBtn = Instance.new("TextButton")
+PlayersBtn.Size = UDim2.new(0, 120, 1, 0)
+PlayersBtn.BackgroundColor3 = Color3.fromRGB(139, 0, 0)
+PlayersBtn.Text = "⏮  Players"
+PlayersBtn.TextColor3 = Color3.fromRGB(240, 240, 250)
+PlayersBtn.TextSize = 14
+PlayersBtn.Font = Enum.Font.GothamBold
+PlayersBtn.AutoButtonColor = false
+PlayersBtn.ZIndex = 203
+PlayersBtn.Parent = TopRow
+
+local pc = Instance.new("UICorner")
+pc.CornerRadius = UDim.new(0, 20)
+pc.Parent = PlayersBtn
+
+local InfoBtn = Instance.new("TextButton")
+InfoBtn.Size = UDim2.new(0, 120, 1, 0)
+InfoBtn.Position = UDim2.new(0, 130, 0, 0)
+InfoBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+InfoBtn.Text = "⚰️  Info"
+InfoBtn.TextColor3 = Color3.fromRGB(240, 240, 250)
+InfoBtn.TextSize = 14
+InfoBtn.Font = Enum.Font.GothamBold
+InfoBtn.AutoButtonColor = false
+InfoBtn.ZIndex = 203
+InfoBtn.Parent = TopRow
+
+local ic2 = Instance.new("UICorner")
+ic2.CornerRadius = UDim.new(0, 20)
+ic2.Parent = InfoBtn
+
+local ContentFrame = Instance.new("Frame")
+ContentFrame.Size = UDim2.new(1, -30, 1, -120)
+ContentFrame.Position = UDim2.new(0, 15, 0, 110)
+ContentFrame.BackgroundTransparency = 1
+ContentFrame.ZIndex = 202
+ContentFrame.Parent = Menu
+
+local ButtonList = Instance.new("ScrollingFrame")
+ButtonList.Size = UDim2.new(1, 0, 1, 0)
+ButtonList.BackgroundTransparency = 1
+ButtonList.ScrollBarThickness = 4
+ButtonList.ScrollBarImageColor3 = Color3.fromRGB(139, 0, 0)
+ButtonList.CanvasSize = UDim2.new(0, 0, 0, 0)
+ButtonList.ZIndex = 202
+ButtonList.Parent = ContentFrame
+
+local UIL = Instance.new("UIListLayout")
+UIL.Padding = UDim.new(0, 12)
+UIL.SortOrder = Enum.SortOrder.LayoutOrder
+UIL.Parent = ButtonList
+
+local InfoPanel = Instance.new("Frame")
+InfoPanel.Size = UDim2.new(1, 0, 1, 0)
+InfoPanel.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+InfoPanel.BorderSizePixel = 0
+InfoPanel.Visible = false
+InfoPanel.ZIndex = 202
+InfoPanel.Active = true
+InfoPanel.Parent = ContentFrame
+
+local ipc = Instance.new("UICorner")
+ipc.CornerRadius = UDim.new(0, 12)
+ipc.Parent = InfoPanel
+
+local InfoText = Instance.new("TextLabel")
+InfoText.Size = UDim2.new(1, -20, 0, 200)
+InfoText.Position = UDim2.new(0, 10, 0, 20)
+InfoText.BackgroundTransparency = 1
+InfoText.Text = "Made by fkdaf3dz\nThanks for using 🩸\n\n⚰️ Vampire themed GUI\n🦇 Blood Debt Role Detector\n\nFeatures:\n• Skeleton ESP\n• Role Detection\n• Blood FX\n• Draggable Interface"
+InfoText.TextColor3 = Color3.fromRGB(220, 220, 220)
+InfoText.TextSize = 16
+InfoText.Font = Enum.Font.Gotham
+InfoText.TextWrapped = true
+InfoText.TextYAlignment = Enum.TextYAlignment.Top
+InfoText.ZIndex = 203
+InfoText.Parent = InfoPanel
+
+PlayersBtn.MouseButton1Click:Connect(function()
+    ButtonList.Visible = true
+    InfoPanel.Visible = false
+    PlayersBtn.BackgroundColor3 = Color3.fromRGB(139, 0, 0)
+    InfoBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+end)
+
+InfoBtn.MouseButton1Click:Connect(function()
+    ButtonList.Visible = false
+    InfoPanel.Visible = true
+    InfoBtn.BackgroundColor3 = Color3.fromRGB(139, 0, 0)
+    PlayersBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+end)
+
+-- Dropdown for Nametag Mode
+local Dropdown = Instance.new("Frame")
+Dropdown.Size = UDim2.new(0, 200, 0, 140)
+Dropdown.Position = UDim2.new(0, 20, 0, 160)
+Dropdown.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+Dropdown.BorderSizePixel = 0
+Dropdown.Visible = false
+Dropdown.ZIndex = 300
+Dropdown.Parent = Menu
+
+local dc = Instance.new("UICorner")
+dc.CornerRadius = UDim.new(0, 10)
+dc.Parent = Dropdown
+
+local nametagOptions = {"Role", "Username", "Character Name"}
+for i, opt in ipairs(nametagOptions) do
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1, -10, 0, 32)
+    btn.Position = UDim2.new(0, 5, 0, (i-1)*34 + 5)
+    btn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    btn.Text = opt
+    btn.TextColor3 = Color3.fromRGB(230, 230, 230)
+    btn.TextSize = 13
+    btn.Font = Enum.Font.Gotham
+    btn.ZIndex = 301
+    btn.Parent = Dropdown
+    
+    local oc = Instance.new("UICorner")
+    oc.CornerRadius = UDim.new(0, 6)
+    oc.Parent = btn
+    
+    btn.MouseButton1Click:Connect(function()
+        BloodDebt.NametagMode = opt
+        Dropdown.Visible = false
+        -- Refresh tags if role ESP is active
+        if BloodDebt.RoleESPEnabled and BloodDebt.DetectRoles then
+            BloodDebt.DetectRoles()
+        end
+    end)
+end
+
+-- Button creation helper
+local function createButton(text, hasDropdown)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1, 0, 0, 60)
+    btn.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+    btn.Text = ""
+    btn.AutoButtonColor = false
+    btn.ZIndex = 203
+    
+    local c = Instance.new("UICorner")
+    c.CornerRadius = UDim.new(0, 14)
+    c.Parent = btn
+    
+    local accent = Instance.new("Frame")
+    accent.Size = UDim2.new(0, 3, 0.7, 0)
+    accent.Position = UDim2.new(0, 0, 0.15, 0)
+    accent.BackgroundColor3 = Color3.fromRGB(139, 0, 0)
+    accent.BorderSizePixel = 0
+    accent.ZIndex = 204
+    accent.Parent = btn
+    
+    local lbl = Instance.new("TextLabel")
+    lbl.Size = UDim2.new(0.6, 0, 1, 0)
+    lbl.Position = UDim2.new(0, 20, 0, 0)
+    lbl.BackgroundTransparency = 1
+    lbl.Text = text
+    lbl.TextColor3 = Color3.fromRGB(230, 230, 230)
+    lbl.TextSize = 15
+    lbl.Font = Enum.Font.Gotham
+    lbl.TextXAlignment = Enum.TextXAlignment.Left
+    lbl.ZIndex = 204
+    lbl.Parent = btn
+    
+    if hasDropdown then
+        local arrow = Instance.new("TextLabel")
+        arrow.Size = UDim2.new(0, 30, 1, 0)
+        arrow.Position = UDim2.new(1, -35, 0, 0)
+        arrow.BackgroundTransparency = 1
+        arrow.Text = "▲"
+        arrow.TextColor3 = Color3.fromRGB(180, 180, 180)
+        arrow.TextSize = 12
+        arrow.ZIndex = 204
+        arrow.Parent = btn
+        
+        btn.MouseButton1Click:Connect(function()
+            Dropdown.Visible = not Dropdown.Visible
+        end)
+    end
+    
+    btn.MouseEnter:Connect(function()
+        TweenService:Create(btn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(40, 40, 50)}):Play()
+        TweenService:Create(accent, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(200, 0, 0)}):Play()
+    end)
+    
+    btn.MouseLeave:Connect(function()
+        TweenService:Create(btn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(25, 25, 30)}):Play()
+        TweenService:Create(accent, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(139, 0, 0)}):Play()
+    end)
+    
+    btn.Parent = ButtonList
+    return btn
+end
+
+-- Nametag Mode Button
+createButton("Nametag Display Mode", true)
+
+-- Blood ESP (Skeleton) Buttons
+createButton("Enable Blood ESP", false).MouseButton1Click:Connect(function()
+    BloodDebt.SkeletonESP.Enable()
+end)
+
+createButton("Disable Blood ESP", false).MouseButton1Click:Connect(function()
+    BloodDebt.SkeletonESP.Disable()
+end)
+
+-- Role ESP Buttons
+createButton("Enable Role ESP", false).MouseButton1Click:Connect(function()
+    if not BloodDebt.RoleESPEnabled and BloodDebt.EnableRoleESP then
+        BloodDebt.EnableRoleESP()
+    end
+end)
+
+createButton("Disable Role ESP", false).MouseButton1Click:Connect(function()
+    if BloodDebt.RoleESPEnabled and BloodDebt.DisableRoleESP then
+        BloodDebt.DisableRoleESP()
+    end
+end)
+
+-- Teleport Button
+local tpBtn = createButton("Teleport to Gun", false)
+tpBtn.MouseButton1Click:Connect(function()
+    if BloodDebt.TeleportToGun then
+        BloodDebt.TeleportToGun()
+    end
+end)
+
+-- Update canvas size
+ButtonList.CanvasSize = UDim2.new(0, 0, 0, UIL.AbsoluteContentSize.Y + 20)
+
+local coffin = Instance.new("TextLabel")
+coffin.Size = UDim2.new(0, 30, 0, 30)
+coffin.Position = UDim2.new(1, -40, 1, -40)
+coffin.BackgroundTransparency = 1
+coffin.Text = "⚰️"
+coffin.TextSize = 24
+coffin.ZIndex = 201
+coffin.Parent = Menu
+
+Menu.Parent = ScreenGui
+
+-- OPEN/CLOSE FUNCTIONS
+function BloodDebt.OpenMenu()
+    if BloodDebt.IsOpen then return end
+    BloodDebt.IsOpen = true
+    
+    local abs = BloodDebt.Island.AbsolutePosition
+    BloodDebt.PlayBloodExplosion(abs.X + 27, abs.Y + 27, 25)
+    
+    BloodDebt.Island.Visible = false
+    
+    if not BloodDebt.MenuPos then
+        BloodDebt.MenuPos = UDim2.new(0.5, -190, 0.5, -225)
+    end
+    
+    Menu.Position = BloodDebt.MenuPos
+    Menu.Size = UDim2.new(0, 60, 0, 60)
+    Menu.Visible = true
+    
+    TweenService:Create(Menu, TweenInfo.new(0.5, Enum.EasingStyle.Back), {
+        Size = UDim2.new(0, 380, 0, 450)
+    }):Play()
+    
+    PlayersBtn.BackgroundColor3 = Color3.fromRGB(139, 0, 0)
+    InfoBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+    ButtonList.Visible = true
+    InfoPanel.Visible = false
+end
+
+function BloodDebt.CloseMenu()
+    if not BloodDebt.IsOpen then return end
+    
+    BloodDebt.MenuPos = Menu.Position
+    
+    local abs = Menu.AbsolutePosition
+    BloodDebt.PlayBloodExplosion(abs.X + 190, abs.Y + 225, 20)
+    
+    TweenService:Create(Menu, TweenInfo.new(0.4, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {
+        Size = UDim2.new(0, 0, 0, 0),
+        Position = UDim2.new(0, abs.X + 190, 0, abs.Y + 225)
+    }):Play()
+    
+    task.delay(0.4, function()
+        Menu.Visible = false
+        BloodDebt.Island.Visible = true
+        BloodDebt.IsOpen = false
+    end)
+end
+
+Close.MouseButton1Click:Connect(BloodDebt.CloseMenu)
+
+-- Drag Menu
+local menuDragging = false
+local menuDragStart = nil
+local menuStartPos = nil
+
+Header.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        menuDragging = true
+        menuDragStart = input.Position
+        menuStartPos = Menu.Position
+        
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                menuDragging = false
+                BloodDebt.MenuPos = Menu.Position
+            end
+        end)
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if menuDragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+        local delta = input.Position - menuDragStart
+        Menu.Position = UDim2.new(
+            menuStartPos.X.Scale, menuStartPos.X.Offset + delta.X,
+            menuStartPos.Y.Scale, menuStartPos.Y.Offset + delta.Y
+        )
+    end
+end)
+-- BLOOD DEBT GUI - SECTION 4: Role Detection Logic & Teleport
+
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local player = Players.LocalPlayer
+
+-- Reference folders from Section 1
+local function getNPCSFolder()
+    local folder = BloodDebt.GetNPCSFolder and BloodDebt.GetNPCSFolder()
+    if not folder then
+        folder = Workspace:FindFirstChild("NPCSFolder")
+    end
+    return folder
+end
+
+local function getBloodFolder()
+    local folder = BloodDebt.GetBloodFolder and BloodDebt.GetBloodFolder()
+    if not folder then
+        folder = Workspace:FindFirstChild("BloodFolder")
+    end
+    return folder
+end
+
+local killerWeapons = BloodDebt.KillerWeapons or {}
+local vigilanteWeapons = BloodDebt.VigilanteWeapons or {}
+local specialKillerWeapons = BloodDebt.SpecialKillerWeapons or {}
+local specificJuggernautWeapons = BloodDebt.SpecificJuggernautWeapons or {}
+local allRoleWeapons = BloodDebt.AllRoleWeapons or {}
+
+-- Helper: Get Character Name from NPCSFolder
+local function getCharacterName(targetPlayer)
+    local NPCSFolder = getNPCSFolder()
+    if NPCSFolder then
+        local playerNPCModel = NPCSFolder:FindFirstChild(targetPlayer.Name)
+        if playerNPCModel then
+            local charNameValue = playerNPCModel:FindFirstChild("CharacterName") 
+                or playerNPCModel:FindFirstChild("NPCName")
+                or playerNPCModel:FindFirstChild("Name")
+            
+            if charNameValue and charNameValue:IsA("StringValue") then
+                return charNameValue.Value
+            end
+            
+            local configObject = playerNPCModel:FindFirstChild("Configuration")
+            if configObject then
+                local nameInConfig = configObject:FindFirstChild("CharacterName")
+                    or configObject:FindFirstChild("NPCName")
+                    or configObject:FindFirstChild("Name")
+                
+                if nameInConfig and nameInConfig:IsA("StringValue") then
+                    return nameInConfig.Value
+                end
+            end
+            
+            local humanoid = playerNPCModel:FindFirstChildOfClass("Humanoid")
+            if humanoid and humanoid.DisplayName ~= targetPlayer.Name then
+                return humanoid.DisplayName
+            end
+        end
+    end
+    return targetPlayer.Name
+end
+
+-- Helper: Clear old highlights and tags
+local function clearOldStuff(character)
+    if not character then return end
+    local oldHighlight = character:FindFirstChild("RoleHighlight")
+    if oldHighlight and oldHighlight:IsA("Highlight") then
+        oldHighlight:Destroy()
+    end
+    local head = character:FindFirstChild("Head")
+    if head then
+        local tag = head:FindFirstChild("RoleBillboard")
+        if tag then tag:Destroy() end
+    end
+end
+
+-- Helper: Add nametag based on mode
+local function addNameTag(character, text, color, targetPlayer)
+    local head = character:FindFirstChild("Head")
+    if not head then return end
+
+    local oldTag = head:FindFirstChild("RoleBillboard")
+    if oldTag then oldTag:Destroy() end
+
+    local displayText = text
+    if BloodDebt.NametagMode == "Username" then
+        displayText = targetPlayer.Name
+    elseif BloodDebt.NametagMode == "Character Name" then
+        displayText = getCharacterName(targetPlayer)
+    end
+
+    local bb = Instance.new("BillboardGui")
+    bb.Name = "RoleBillboard"
+    bb.Size = UDim2.new(0, 100, 0, 20)
+    bb.StudsOffset = Vector3.new(0, 2.5, 0)
+    bb.Adornee = head
+    bb.AlwaysOnTop = true
+    bb.Parent = head
+
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, 0, 1, 0)
+    label.BackgroundTransparency = 1
+    label.Text = displayText
+    label.TextColor3 = color
+    label.TextStrokeTransparency = 0.2
+    label.TextScaled = true
+    label.Font = Enum.Font.SourceSansBold
+    label.Parent = bb
+end
+
+-- Helper: Tag player with role
+local function tagPlayer(targetPlayer, roleColor, labelText)
+    if not targetPlayer.Character then return end
+    clearOldStuff(targetPlayer.Character)
+
+    local highlight = Instance.new("Highlight", targetPlayer.Character)
+    highlight.Name = "RoleHighlight"
+    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    highlight.Enabled = true
+    highlight.FillColor = roleColor
+    highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+    highlight.FillTransparency = 0.5
+    highlight.OutlineTransparency = 0
+
+    if labelText then
+        addNameTag(targetPlayer.Character, labelText, roleColor, targetPlayer)
+    end
+end
+
+-- Helper: Collect all tools from player
+local function collectPlayerTools(targetPlayer)
+    local tools = {}
+    local backpack = targetPlayer:FindFirstChildOfClass("Backpack")
+    if backpack then
+        for _, tool in ipairs(backpack:GetChildren()) do
+            if tool:IsA("Tool") then
+                tools[tool.Name] = tool
+            end
+        end
+    end
+    if targetPlayer.Character then
+        for _, tool in ipairs(targetPlayer.Character:GetChildren()) do
+            if tool:IsA("Tool") then
+                tools[tool.Name] = tool
+            end
+        end
+    end
+    
+    local NPCSFolder = getNPCSFolder()
+    if NPCSFolder then
+        local playerNPCModel = NPCSFolder:FindFirstChild(targetPlayer.Name)
+        if playerNPCModel then
+            for _, child in ipairs(playerNPCModel:GetChildren()) do
+                if child:IsA("Tool") then
+                    tools[child.Name] = child
+                end
+            end
+        end
+    end
+    return tools
+end
+
+-- Helper: Get role from weapons
+local function getStandardRoleFromWeapons(toolsByName)
+    for weaponName, _ in pairs(killerWeapons) do
+        if not specialKillerWeapons[weaponName] and toolsByName[weaponName] then
+            return "Killer", Color3.fromRGB(255, 0, 0), "KILLER"
+        end
+    end
+    for weaponName, _ in pairs(vigilanteWeapons) do
+        if toolsByName[weaponName] then
+            return "Vigilante", Color3.fromRGB(0, 255, 255), "VIGILANTE"
+        end
+    end
+    return nil, nil, nil
+end
+
+-- Helper: Parse hint text
+local function parseSingleHint(hintContent)
+    local cleanedContent = hintContent:match("^%s*(.-)%s*$") or ""
+    if string.len(cleanedContent) == 0 then
+        return "invalid", nil
+    end
+    
+    local taskMatch = cleanedContent:match("^Is often seen%s*(.*)$")
+    if taskMatch then
+        return "task", taskMatch:match("^%s*(.-)%s*$")
+    end
+    
+    local traitBracketMatch = cleanedContent:match("^%[.-%]$")
+    if traitBracketMatch then
+        local cleanClue = traitBracketMatch:gsub("[%[%]]", ""):match("^%s*(.-)%s*$") or ""
+        if string.len(cleanClue) > 0 and cleanClue:lower() ~= "assigned task" and cleanClue:lower() ~= "seen" then
+            return "trait", cleanClue
+        end
+    end
+    
+    return "trait", cleanedContent
+end
+
+-- Improved hint matching
+local function updateMatchingHintPlayers()
+    playersMatchingHints = {}
+    if not BloodDebt.RoleESPEnabled then return end
+    
+    local PlayerGui = player:FindFirstChild("PlayerGui")
+    if not PlayerGui then return end
+    
+    local TargetHintLabel = PlayerGui:FindFirstChild("RESETONDEATHStatusGui") and PlayerGui.RESETONDEATHStatusGui:FindFirstChild("TARGETHINT")
+    if not TargetHintLabel or not TargetHintLabel:IsA("TextLabel") then return end
+    
+    local hintText = TargetHintLabel.Text
+    if string.len(string.gsub(hintText, "%s", "")) == 0 then return end
+    
+    local hintPrefix = "Hints : "
+    local lowerHintText = string.lower(hintText)
+    if lowerHintText:sub(1, string.len(hintPrefix)) ~= string.lower(hintPrefix) then return end
+    
+    local actualHintContent = hintText:sub(string.len(hintPrefix) + 1):match("^%s*(.-)%s*$")
+    local individualHintParts = {}
+    
+    for part in string.gmatch(actualHintContent, "([^%+]+)") do
+        local clean = part:match("^%s*(.-)%s*$")
+        if clean and #clean > 0 then
+            table.insert(individualHintParts, clean)
+        end
+    end
+    
+    local targetConditions = {}
+    for i, hintPartContent in ipairs(individualHintParts) do
+        local targetNumberMatch = hintPartContent:match("^%[%s*(%d+)%s*%]")
+        local targetNumber = tonumber(targetNumberMatch) or 1
+        local cleanedHintPartContent = hintPartContent:gsub("^%[%s*%d+%s*%]%s*", ""):match("^%s*(.-)%s*$") or ""
+        local hintType, hintValue = parseSingleHint(cleanedHintPartContent)
+        
+        if hintType ~= "invalid" and hintValue and string.len(hintValue) > 0 then
+            if not targetConditions[targetNumber] then targetConditions[targetNumber] = {} end
+            table.insert(targetConditions[targetNumber], { type = hintType, value = hintValue:lower() })
+        end
+    end
+    
+    local NPCSFolder = getNPCSFolder()
+    if not NPCSFolder then return end
+    
+    for _, targetPlayer in ipairs(Players:GetPlayers()) do
+        if targetPlayer ~= player and targetPlayer.Character then
+            local playerNPCModel = NPCSFolder:FindFirstChild(targetPlayer.Name)
+            if playerNPCModel then
+                local matchesThisPlayer = false
+                
+                for targetNum, conditions in pairs(targetConditions) do
+                    local allConditionsMatch = true
+                    
+                    for _, condition in ipairs(conditions) do
+                        local conditionMet = false
+                        
+                        if condition.type == "task" then
+                            local tasksFolder = playerNPCModel:FindFirstChild("Tasks")
+                            if tasksFolder then
+                                for _, taskObj in ipairs(tasksFolder:GetChildren()) do
+                                    if taskObj:IsA("StringValue") then
+                                        local taskText = string.lower(taskObj.Value)
+                                        if string.find(taskText, condition.value, 1, true) then
+                                            conditionMet = true
+                                            break
+                                        end
+                                    end
+                                end
+                            end
+                        elseif condition.type == "trait" then
+                            local traitsFolder = playerNPCModel:FindFirstChild("Traits")
+                            if traitsFolder then
+                                for _, traitObj in ipairs(traitsFolder:GetChildren()) do
+                                    if traitObj:IsA("StringValue") then
+                                        local traitText = string.lower(traitObj.Value)
+                                        if string.find(traitText, condition.value, 1, true) then
+                                            conditionMet = true
+                                            break
+                                        end
+                                    end
+                                end
+                            end
+                            if not conditionMet then
+                                local charName = string.lower(getCharacterName(targetPlayer))
+                                if string.find(charName, condition.value, 1, true) then
+                                    conditionMet = true
+                                end
+                            end
+                        end
+                        
+                        if not conditionMet then
+                            allConditionsMatch = false
+                            break
+                        end
+                    end
+                    
+                    if allConditionsMatch then
+                        matchesThisPlayer = true
+                        break
+                    end
+                end
+                
+                if matchesThisPlayer then
+                    playersMatchingHints[targetPlayer] = true
+                end
+            end
+        end
+    end
+end
+
+-- Dropped Gun ESP
+local function clearDroppedGunEsp(gunTool)
+    if not gunTool then return end
+    local old = gunTool:FindFirstChildWhichIsA("Highlight")
+    if old then old:Destroy() end
+end
+
+local function addDroppedGunEsp(gunTool)
+    if not gunTool or not gunTool:IsA("Tool") then return end
+    clearDroppedGunEsp(gunTool)
+    
+    local highlight = Instance.new("Highlight")
+    highlight.Name = "DroppedGunHighlight"
+    highlight.Adornee = gunTool
+    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    highlight.FillColor = Color3.fromRGB(255, 255, 0)
+    highlight.FillTransparency = 0.4
+    highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+    highlight.OutlineTransparency = 0
+    highlight.Parent = gunTool
+end
+
+local function updateDroppedGunEsp()
+    if not BloodDebt.RoleESPEnabled then return end
+    local BloodFolder = getBloodFolder()
+    if not BloodFolder then return end
+    
+    for _, obj in ipairs(BloodFolder:GetChildren()) do
+        if obj:IsA("Tool") then
+            local weaponName = obj.Name
+            if killerWeapons[weaponName] or vigilanteWeapons[weaponName] or specialKillerWeapons[weaponName] then
+                addDroppedGunEsp(obj)
+                if not droppedGunConnections[obj] then
+                    droppedGunConnections[obj] = obj.AncestryChanged:Connect(function()
+                        if not obj.Parent then
+                            clearDroppedGunEsp(obj)
+                            droppedGunConnections[obj]:Disconnect()
+                            droppedGunConnections[obj] = nil
+                        end
+                    end)
+                end
+            end
+        end
+    end
+end
+
+local function clearAllDroppedGunEsp()
+    local BloodFolder = getBloodFolder()
+    if BloodFolder then
+        for _, obj in BloodFolder:GetChildren() do
+            if obj:IsA("Tool") then
+                clearDroppedGunEsp(obj)
+            end
+        end
+    end
+    for tool, conn in pairs(droppedGunConnections) do
+        if conn and conn.Connected then conn:Disconnect() end
+        droppedGunConnections[tool] = nil
+    end
+end
+
+-- Main Role Detection Function
+function BloodDebt.DetectRoles()
+    if not BloodDebt.RoleESPEnabled then return end
+    
+    local everyoneHasGun = false
+    local noOneHasGun = false
+    local newHighestPriorityKiller = false
+    local theSingleKillerGunHolder = nil
+    local specificJuggernautDetected = false
+    local theSpecificJuggernautHolder = nil
+    local specialKillerDetected = false
+    local playersWithSpecialWeapons = {}
+    local playersWithValidChars = {}
+    local playersWithoutAnyGun = {}
+    local playersWithAnyGun = {}
+    local playersWithVigilanteWeapons = {}
+    playersWithStandardKillerWeapons = {}
+    local vigilanteCount = 0
+    local killerGunHoldersCount = 0
+    local singleKillerCandidate = nil
+
+    for _, targetPlayer in ipairs(Players:GetPlayers()) do
+        if targetPlayer ~= player and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            playersWithValidChars[targetPlayer] = true
+            
+            local toolsByName = collectPlayerTools(targetPlayer)
+            local hasAnyRoleWeapon = false
+            local hasVigilanteWeapon = false
+            local hasKillerWeapon = false
+            
+            for name, _ in pairs(toolsByName) do
+                if specialKillerWeapons[name] then
+                    specialKillerDetected = true
+                    playersWithSpecialWeapons[targetPlayer] = true
+                    if specificJuggernautWeapons[name] then
+                        specificJuggernautDetected = true
+                        theSpecificJuggernautHolder = targetPlayer
+                    end
+                end
+                if allRoleWeapons[name] then hasAnyRoleWeapon = true end
+                if vigilanteWeapons[name] then 
+                    hasVigilanteWeapon = true 
+                    playersWithVigilanteWeapons[targetPlayer] = true
+                end
+                if killerWeapons[name] then 
+                    hasKillerWeapon = true 
+                    if not specialKillerWeapons[name] then
+                        playersWithStandardKillerWeapons[targetPlayer] = true
+                    end
+                end
+            end
+            
+            if hasVigilanteWeapon then
+                vigilanteCount = vigilanteCount + 1
+                if firstVigilanteTracker[targetPlayer] == nil then
+                    firstVigilanteTracker[targetPlayer] = true
+                end
+            end
+            
+            if hasKillerWeapon then
+                killerGunHoldersCount = killerGunHoldersCount + 1
+                singleKillerCandidate = targetPlayer
+            end
+            
+            if not hasAnyRoleWeapon then
+                playersWithoutAnyGun[targetPlayer] = true
+            else
+                playersWithAnyGun[targetPlayer] = true
+            end
+        else
+            clearOldStuff(targetPlayer.Character)
+        end
+    end
+    
+    if vigilanteCount == 1 and killerGunHoldersCount == 1 and singleKillerCandidate then
+        newHighestPriorityKiller = true
+        theSingleKillerGunHolder = singleKillerCandidate
+        specialKillerDetected = false
+        specificJuggernautDetected = false
+        rolesLockedByDistance = false
+        lockedDistanceRoles = {}
+        
+        if theSingleKillerGunHolder == player then
+            updateMatchingHintPlayers()
+        end
+    end
+    
+    local otherPlayersCount = 0
+    for _ in pairs(playersWithValidChars) do otherPlayersCount = otherPlayersCount + 1 end
+    
+    local allHaveGun = true
+    for p, _ in pairs(playersWithValidChars) do
+        if playersWithoutAnyGun[p] then allHaveGun = false break end
+    end
+    if allHaveGun and otherPlayersCount > 0 then everyoneHasGun = true end
+    
+    local anyHasGun = false
+    for p, _ in pairs(playersWithValidChars) do
+        if playersWithAnyGun[p] then anyHasGun = true break end
+    end
+    if not anyHasGun and otherPlayersCount > 0 then noOneHasGun = true end
+    
+    local higherPriorityActive = newHighestPriorityKiller or specificJuggernautDetected or specialKillerDetected
+    
+    if not higherPriorityActive then
+        if everyoneHasGun and not rolesLockedByDistance then
+            rolesLockedByDistance = true
+            lockedDistanceRoles = {}
+            local localHRP = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+            if localHRP then
+                for p, _ in pairs(playersWithValidChars) do
+                    local playerHRP = p.Character:FindFirstChild("HumanoidRootPart")
+                    if playerHRP then
+                        local distance = (localHRP.Position - playerHRP.Position).Magnitude
+                        lockedDistanceRoles[p] = (distance >= distanceThreshold) and "Killer" or "Innocent"
+                    end
+                end
+            else
+                rolesLockedByDistance = false
+            end
+        elseif noOneHasGun and rolesLockedByDistance then
+            rolesLockedByDistance = false
+            lockedDistanceRoles = {}
+        end
+    else
+        if rolesLockedByDistance then
+            rolesLockedByDistance = false
+            lockedDistanceRoles = {}
+        end
+    end
+    
+    updateMatchingHintPlayers()
+    
+    local killerColor = Color3.fromRGB(255, 0, 0)
+    local innocentColor = Color3.fromRGB(0, 255, 0)
+    local vigilanteColor = Color3.fromRGB(0, 255, 255)
+    local hintMatchColor = Color3.new(1, 1, 0)
+    local vigilanteHintColor = Color3.fromRGB(128, 0, 128)
+    local killerHintColor = Color3.fromRGB(255, 165, 0)
+    
+    for _, targetPlayer in ipairs(Players:GetPlayers()) do
+        if playersWithValidChars[targetPlayer] then
+            if newHighestPriorityKiller and targetPlayer == theSingleKillerGunHolder then
+                tagPlayer(targetPlayer, killerColor, "KILLER")
+            elseif specificJuggernautDetected then
+                i
