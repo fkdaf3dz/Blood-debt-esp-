@@ -1,4 +1,4 @@
--- BLOOD DEBT GUI - SECTION 1: Services, Island, Blood FX & Role Data
+-- BLOOD DEBT GUI - SECTION 1: Core Services & Setup
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local Players = game:GetService("Players")
@@ -34,7 +34,21 @@ ScreenGui.ResetOnSpawn = false
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 ScreenGui.Parent = playerGui
 
--- BLOOD FX
+-- STATE VARIABLES
+local stopRoleLoop = false
+local rolesLockedByDistance = false
+local lockedDistanceRoles = {}
+local playersMatchingHints = {}
+local firstVigilanteTracker = {}
+local playersWithStandardKillerWeapons = {}
+local droppedGunConnections = {}
+local distanceThreshold = 30
+local espPlayerAddedConnection = nil
+local espCharacterAddedConnections = {}
+local hintTextConnection = nil
+-- BLOOD DEBT GUI - SECTION 2: Blood FX & Island UI
+
+-- BLOOD FX CONTAINER
 local BloodContainer = Instance.new("Frame")
 BloodContainer.Size = UDim2.new(1, 0, 1, 0)
 BloodContainer.BackgroundTransparency = 1
@@ -86,6 +100,104 @@ function BloodDebt.PlayBloodExplosion(x, y, count)
     end
     task.delay(1, function() BloodContainer.Visible = false end)
 end
+
+-- BAT ISLAND BUTTON
+BloodDebt.Island = Instance.new("TextButton")
+BloodDebt.Island.Size = UDim2.new(0, 55, 0, 55)
+BloodDebt.Island.Position = UDim2.new(0.85, 0, 0.1, 0)
+BloodDebt.Island.BackgroundColor3 = Color3.fromRGB(15, 10, 18)
+BloodDebt.Island.Text = "🦇"
+BloodDebt.Island.TextSize = 28
+BloodDebt.Island.Font = Enum.Font.GothamBold
+BloodDebt.Island.AutoButtonColor = false
+BloodDebt.Island.ZIndex = 100
+
+local ic = Instance.new("UICorner")
+ic.CornerRadius = UDim.new(1, 0)
+ic.Parent = BloodDebt.Island
+
+local shadow = Instance.new("ImageLabel")
+shadow.Size = UDim2.new(1.4, 0, 1.4, 0)
+shadow.Position = UDim2.new(-0.2, 0, -0.2, 0)
+shadow.BackgroundTransparency = 1
+shadow.Image = "rbxassetid://5028857084"
+shadow.ImageColor3 = Color3.fromRGB(0, 0, 0)
+shadow.ImageTransparency = 0.9
+shadow.ZIndex = 99
+shadow.Parent = BloodDebt.Island
+
+BloodDebt.Island.Parent = ScreenGui
+
+-- Floating Animation
+local floatTween = nil
+local function startFloating()
+    if floatTween then floatTween:Cancel() end
+    floatTween = TweenService:Create(BloodDebt.Island,
+        TweenInfo.new(2.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
+        {Position = UDim2.new(BloodDebt.Island.Position.X.Scale, BloodDebt.Island.Position.X.Offset, BloodDebt.Island.Position.Y.Scale, BloodDebt.Island.Position.Y.Offset - 5)}
+    )
+    floatTween:Play()
+end
+startFloating()
+
+-- Island Dragging
+local dragInput = nil
+local dragStartPos = nil
+local islandStartPos = nil
+
+BloodDebt.Island.InputBegan:Connect(function(input)
+    if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
+    if BloodDebt.IsOpen then return end
+    
+    dragInput = input
+    dragStartPos = input.Position
+    islandStartPos = BloodDebt.Island.Position
+    BloodDebt.IsDragging = false
+    
+    if floatTween then floatTween:Pause() end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if input == dragInput and not BloodDebt.IsOpen then
+        local delta = input.Position - dragStartPos
+        if delta.Magnitude > 3 then
+            BloodDebt.IsDragging = true
+            BloodDebt.Island.Position = UDim2.new(
+                islandStartPos.X.Scale, islandStartPos.X.Offset + delta.X,
+                islandStartPos.Y.Scale, islandStartPos.Y.Offset + delta.Y
+            )
+        end
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input == dragInput and not BloodDebt.IsOpen then
+        dragInput = nil
+        if not BloodDebt.IsDragging then
+            BloodDebt.OpenMenu()
+        else
+            startFloating()
+        end
+        BloodDebt.IsDragging = false
+    end
+end)
+
+BloodDebt.Island.MouseEnter:Connect(function()
+    TweenService:Create(BloodDebt.Island, TweenInfo.new(0.2), {
+        BackgroundColor3 = Color3.fromRGB(139, 0, 0),
+        Size = UDim2.new(0, 60, 0, 60)
+    }):Play()
+    local abs = BloodDebt.Island.AbsolutePosition
+    BloodDebt.PlayBloodExplosion(abs.X + 27, abs.Y + 27, 8)
+end)
+
+BloodDebt.Island.MouseLeave:Connect(function()
+    TweenService:Create(BloodDebt.Island, TweenInfo.new(0.2), {
+        BackgroundColor3 = Color3.fromRGB(15, 10, 18),
+        Size = UDim2.new(0, 55, 0, 55)
+    }):Play()
+end)
+-- BLOOD DEBT GUI - SECTION 3: Weapon Database & Configuration
 
 -- WEAPON DATABASES
 local killerWeapons = {
@@ -160,20 +272,7 @@ local hintMatchColor = Color3.new(1, 1, 0)
 local vigilanteHintColor = Color3.fromRGB(128, 0, 128)
 local killerHintColor = Color3.fromRGB(255, 165, 0)
 
--- STATE VARIABLES
-local stopRoleLoop = false
-local rolesLockedByDistance = false
-local lockedDistanceRoles = {}
-local playersMatchingHints = {}
-local firstVigilanteTracker = {}
-local playersWithStandardKillerWeapons = {}
-local droppedGunConnections = {}
-local distanceThreshold = 30
-local espPlayerAddedConnection = nil
-local espCharacterAddedConnections = {}
-local hintTextConnection = nil
-
--- Export folders for other sections
+-- EXPORT REFERENCES
 BloodDebt.GetNPCSFolder = function() return NPCSFolder end
 BloodDebt.GetBloodFolder = function() return BloodFolder end
 BloodDebt.KillerWeapons = killerWeapons
@@ -181,102 +280,7 @@ BloodDebt.VigilanteWeapons = vigilanteWeapons
 BloodDebt.SpecialKillerWeapons = specialKillerWeapons
 BloodDebt.SpecificJuggernautWeapons = specificJuggernautWeapons
 BloodDebt.AllRoleWeapons = allRoleWeapons
-
--- BAT ISLAND
-BloodDebt.Island = Instance.new("TextButton")
-BloodDebt.Island.Size = UDim2.new(0, 55, 0, 55)
-BloodDebt.Island.Position = UDim2.new(0.85, 0, 0.1, 0)
-BloodDebt.Island.BackgroundColor3 = Color3.fromRGB(15, 10, 18)
-BloodDebt.Island.Text = "🦇"
-BloodDebt.Island.TextSize = 28
-BloodDebt.Island.Font = Enum.Font.GothamBold
-BloodDebt.Island.AutoButtonColor = false
-BloodDebt.Island.ZIndex = 100
-
-local ic = Instance.new("UICorner")
-ic.CornerRadius = UDim.new(1, 0)
-ic.Parent = BloodDebt.Island
-
-local shadow = Instance.new("ImageLabel")
-shadow.Size = UDim2.new(1.4, 0, 1.4, 0)
-shadow.Position = UDim2.new(-0.2, 0, -0.2, 0)
-shadow.BackgroundTransparency = 1
-shadow.Image = "rbxassetid://5028857084"
-shadow.ImageColor3 = Color3.fromRGB(0, 0, 0)
-shadow.ImageTransparency = 0.9
-shadow.ZIndex = 99
-shadow.Parent = BloodDebt.Island
-
-BloodDebt.Island.Parent = ScreenGui
-
-local floatTween = nil
-local function startFloating()
-    if floatTween then floatTween:Cancel() end
-    floatTween = TweenService:Create(BloodDebt.Island,
-        TweenInfo.new(2.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
-        {Position = UDim2.new(BloodDebt.Island.Position.X.Scale, BloodDebt.Island.Position.X.Offset, BloodDebt.Island.Position.Y.Scale, BloodDebt.Island.Position.Y.Offset - 5)}
-    )
-    floatTween:Play()
-end
-startFloating()
-
-local dragInput = nil
-local dragStartPos = nil
-local islandStartPos = nil
-
-BloodDebt.Island.InputBegan:Connect(function(input)
-    if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
-    if BloodDebt.IsOpen then return end
-    
-    dragInput = input
-    dragStartPos = input.Position
-    islandStartPos = BloodDebt.Island.Position
-    BloodDebt.IsDragging = false
-    
-    if floatTween then floatTween:Pause() end
-end)
-
-UserInputService.InputChanged:Connect(function(input)
-    if input == dragInput and not BloodDebt.IsOpen then
-        local delta = input.Position - dragStartPos
-        if delta.Magnitude > 3 then
-            BloodDebt.IsDragging = true
-            BloodDebt.Island.Position = UDim2.new(
-                islandStartPos.X.Scale, islandStartPos.X.Offset + delta.X,
-                islandStartPos.Y.Scale, islandStartPos.Y.Offset + delta.Y
-            )
-        end
-    end
-end)
-
-UserInputService.InputEnded:Connect(function(input)
-    if input == dragInput and not BloodDebt.IsOpen then
-        dragInput = nil
-        if not BloodDebt.IsDragging then
-            BloodDebt.OpenMenu()
-        else
-            startFloating()
-        end
-        BloodDebt.IsDragging = false
-    end
-end)
-
-BloodDebt.Island.MouseEnter:Connect(function()
-    TweenService:Create(BloodDebt.Island, TweenInfo.new(0.2), {
-        BackgroundColor3 = Color3.fromRGB(139, 0, 0),
-        Size = UDim2.new(0, 60, 0, 60)
-    }):Play()
-    local abs = BloodDebt.Island.AbsolutePosition
-    BloodDebt.PlayBloodExplosion(abs.X + 27, abs.Y + 27, 8)
-end)
-
-BloodDebt.Island.MouseLeave:Connect(function()
-    TweenService:Create(BloodDebt.Island, TweenInfo.new(0.2), {
-        BackgroundColor3 = Color3.fromRGB(15, 10, 18),
-        Size = UDim2.new(0, 55, 0, 55)
-    }):Play()
-end)
--- BLOOD DEBT GUI - SECTION 2: Blood ESP (UNCHANGED)
+-- BLOOD DEBT GUI - SECTION 4: Skeleton ESP
 
 BloodDebt.SkeletonESP = {
     Enabled = false,
@@ -543,7 +547,8 @@ function BloodDebt.SkeletonESP.Disable()
     end
     BloodDebt.SkeletonESP.ESPs = {}
 end
--- BLOOD DEBT GUI - SECTION 3: Menu UI with Role Features
+-- BLOOD DEBT GUI - SECTION 5: Menu UI Creation
+
 local Menu = Instance.new("Frame")
 Menu.Size = UDim2.new(0, 380, 0, 450)
 Menu.Position = UDim2.new(0.5, -190, 0.5, -225)
@@ -574,6 +579,7 @@ local mc = Instance.new("UICorner")
 mc.CornerRadius = UDim.new(0, 16)
 mc.Parent = Menu
 
+-- Blood Drip Effect
 local dripContainer = Instance.new("Frame")
 dripContainer.Size = UDim2.new(1, 0, 1, 0)
 dripContainer.BackgroundTransparency = 1
@@ -603,6 +609,7 @@ task.spawn(function()
     end
 end)
 
+-- Header
 local Header = Instance.new("Frame")
 Header.Name = "DragHeader"
 Header.Size = UDim2.new(1, 0, 0, 55)
@@ -648,6 +655,7 @@ local cc = Instance.new("UICorner")
 cc.CornerRadius = UDim.new(0, 12)
 cc.Parent = Close
 
+-- Navigation Tabs
 local TopRow = Instance.new("Frame")
 TopRow.Size = UDim2.new(1, -30, 0, 40)
 TopRow.Position = UDim2.new(0, 15, 0, 65)
@@ -686,6 +694,7 @@ local ic2 = Instance.new("UICorner")
 ic2.CornerRadius = UDim.new(0, 20)
 ic2.Parent = InfoBtn
 
+-- Content Area
 local ContentFrame = Instance.new("Frame")
 ContentFrame.Size = UDim2.new(1, -30, 1, -120)
 ContentFrame.Position = UDim2.new(0, 15, 0, 110)
@@ -733,6 +742,7 @@ InfoText.TextYAlignment = Enum.TextYAlignment.Top
 InfoText.ZIndex = 203
 InfoText.Parent = InfoPanel
 
+-- Tab Switching
 PlayersBtn.MouseButton1Click:Connect(function()
     ButtonList.Visible = true
     InfoPanel.Visible = false
@@ -786,8 +796,9 @@ for i, opt in ipairs(nametagOptions) do
         end
     end)
 end
+-- BLOOD DEBT GUI - SECTION 6: Menu Buttons & Role Helpers
 
--- Button creation helper
+-- Button Creation Helper
 local function createButton(text, hasDropdown)
     local btn = Instance.new("TextButton")
     btn.Size = UDim2.new(1, 0, 0, 60)
@@ -850,10 +861,9 @@ local function createButton(text, hasDropdown)
     return btn
 end
 
--- Nametag Mode Button
+-- Create Buttons
 createButton("Nametag Display Mode", true)
 
--- Blood ESP (Skeleton) Buttons
 createButton("Enable Blood ESP", false).MouseButton1Click:Connect(function()
     BloodDebt.SkeletonESP.Enable()
 end)
@@ -862,7 +872,6 @@ createButton("Disable Blood ESP", false).MouseButton1Click:Connect(function()
     BloodDebt.SkeletonESP.Disable()
 end)
 
--- Role ESP Buttons
 createButton("Enable Role ESP", false).MouseButton1Click:Connect(function()
     if not BloodDebt.RoleESPEnabled and BloodDebt.EnableRoleESP then
         BloodDebt.EnableRoleESP()
@@ -875,7 +884,6 @@ createButton("Disable Role ESP", false).MouseButton1Click:Connect(function()
     end
 end)
 
--- Teleport Button
 local tpBtn = createButton("Teleport to Gun", false)
 tpBtn.MouseButton1Click:Connect(function()
     if BloodDebt.TeleportToGun then
@@ -883,7 +891,6 @@ tpBtn.MouseButton1Click:Connect(function()
     end
 end)
 
--- Update canvas size
 ButtonList.CanvasSize = UDim2.new(0, 0, 0, UIL.AbsoluteContentSize.Y + 20)
 
 local coffin = Instance.new("TextLabel")
@@ -896,6 +903,167 @@ coffin.ZIndex = 201
 coffin.Parent = Menu
 
 Menu.Parent = ScreenGui
+
+-- ROLE DETECTION HELPERS
+local function getNPCSFolder()
+    local folder = BloodDebt.GetNPCSFolder and BloodDebt.GetNPCSFolder()
+    if not folder then
+        folder = Workspace:FindFirstChild("NPCSFolder")
+    end
+    return folder
+end
+
+local function getBloodFolder()
+    local folder = BloodDebt.GetBloodFolder and BloodDebt.GetBloodFolder()
+    if not folder then
+        folder = Workspace:FindFirstChild("BloodFolder")
+    end
+    return folder
+end
+
+local function getCharacterName(targetPlayer)
+    local NPCSFolder = getNPCSFolder()
+    if NPCSFolder then
+        local playerNPCModel = NPCSFolder:FindFirstChild(targetPlayer.Name)
+        if playerNPCModel then
+            local charNameValue = playerNPCModel:FindFirstChild("CharacterName") 
+                or playerNPCModel:FindFirstChild("NPCName")
+                or playerNPCModel:FindFirstChild("Name")
+            
+            if charNameValue and charNameValue:IsA("StringValue") then
+                return charNameValue.Value
+            end
+            
+            local configObject = playerNPCModel:FindFirstChild("Configuration")
+            if configObject then
+                local nameInConfig = configObject:FindFirstChild("CharacterName")
+                    or configObject:FindFirstChild("NPCName")
+                    or configObject:FindFirstChild("Name")
+                
+                if nameInConfig and nameInConfig:IsA("StringValue") then
+                    return nameInConfig.Value
+                end
+            end
+            
+            local humanoid = playerNPCModel:FindFirstChildOfClass("Humanoid")
+            if humanoid and humanoid.DisplayName ~= targetPlayer.Name then
+                return humanoid.DisplayName
+            end
+        end
+    end
+    return targetPlayer.Name
+end
+
+local function clearOldStuff(character)
+    if not character then return end
+    local oldHighlight = character:FindFirstChild("RoleHighlight")
+    if oldHighlight and oldHighlight:IsA("Highlight") then
+        oldHighlight:Destroy()
+    end
+    local head = character:FindFirstChild("Head")
+    if head then
+        local tag = head:FindFirstChild("RoleBillboard")
+        if tag then tag:Destroy() end
+    end
+end
+
+local function addNameTag(character, text, color, targetPlayer)
+    local head = character:FindFirstChild("Head")
+    if not head then return end
+
+    local oldTag = head:FindFirstChild("RoleBillboard")
+    if oldTag then oldTag:Destroy() end
+
+    local displayText = text
+    if BloodDebt.NametagMode == "Username" then
+        displayText = targetPlayer.Name
+    elseif BloodDebt.NametagMode == "Character Name" then
+        displayText = getCharacterName(targetPlayer)
+    end
+
+    local bb = Instance.new("BillboardGui")
+    bb.Name = "RoleBillboard"
+    bb.Size = UDim2.new(0, 100, 0, 20)
+    bb.StudsOffset = Vector3.new(0, 2.5, 0)
+    bb.Adornee = head
+    bb.AlwaysOnTop = true
+    bb.Parent = head
+
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, 0, 1, 0)
+    label.BackgroundTransparency = 1
+    label.Text = displayText
+    label.TextColor3 = color
+    label.TextStrokeTransparency = 0.2
+    label.TextScaled = true
+    label.Font = Enum.Font.SourceSansBold
+    label.Parent = bb
+end
+
+local function tagPlayer(targetPlayer, roleColor, labelText)
+    if not targetPlayer.Character then return end
+    clearOldStuff(targetPlayer.Character)
+
+    local highlight = Instance.new("Highlight", targetPlayer.Character)
+    highlight.Name = "RoleHighlight"
+    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    highlight.Enabled = true
+    highlight.FillColor = roleColor
+    highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+    highlight.FillTransparency = 0.5
+    highlight.OutlineTransparency = 0
+
+    if labelText then
+        addNameTag(targetPlayer.Character, labelText, roleColor, targetPlayer)
+    end
+end
+
+local function collectPlayerTools(targetPlayer)
+    local tools = {}
+    local backpack = targetPlayer:FindFirstChildOfClass("Backpack")
+    if backpack then
+        for _, tool in ipairs(backpack:GetChildren()) do
+            if tool:IsA("Tool") then
+                tools[tool.Name] = tool
+            end
+        end
+    end
+    if targetPlayer.Character then
+        for _, tool in ipairs(targetPlayer.Character:GetChildren()) do
+            if tool:IsA("Tool") then
+                tools[tool.Name] = tool
+            end
+        end
+    end
+    
+    local NPCSFolder = getNPCSFolder()
+    if NPCSFolder then
+        local playerNPCModel = NPCSFolder:FindFirstChild(targetPlayer.Name)
+        if playerNPCModel then
+            for _, child in ipairs(playerNPCModel:GetChildren()) do
+                if child:IsA("Tool") then
+                    tools[child.Name] = child
+                end
+            end
+        end
+    end
+    return tools
+end
+
+local function getStandardRoleFromWeapons(toolsByName)
+    for weaponName, _ in pairs(killerWeapons) do
+        if not specialKillerWeapons[weaponName] and toolsByName[weaponName] then
+            return "Killer", Color3.fromRGB(255, 0, 0), "KILLER"
+        end
+    end
+    for weaponName, _ in pairs(vigilanteWeapons) do
+        if toolsByName[weaponName] then
+            return "Vigilante", Color3.fromRGB(0, 255, 255), "VIGILANTE"
+        end
+    end
+    return nil, nil, nil
+end
+-- BLOOD DEBT GUI - SECTION 7: Menu Functions, ESP Control & Teleport
 
 -- OPEN/CLOSE FUNCTIONS
 function BloodDebt.OpenMenu()
@@ -947,7 +1115,7 @@ end
 
 Close.MouseButton1Click:Connect(BloodDebt.CloseMenu)
 
--- Drag Menu
+-- Menu Dragging
 local menuDragging = false
 local menuDragStart = nil
 local menuStartPos = nil
@@ -976,185 +1144,8 @@ UserInputService.InputChanged:Connect(function(input)
         )
     end
 end)
--- BLOOD DEBT GUI - SECTION 4: Role Detection Logic & Teleport
 
-local Players = game:GetService("Players")
-local Workspace = game:GetService("Workspace")
-local player = Players.LocalPlayer
-
--- Reference folders from Section 1
-local function getNPCSFolder()
-    local folder = BloodDebt.GetNPCSFolder and BloodDebt.GetNPCSFolder()
-    if not folder then
-        folder = Workspace:FindFirstChild("NPCSFolder")
-    end
-    return folder
-end
-
-local function getBloodFolder()
-    local folder = BloodDebt.GetBloodFolder and BloodDebt.GetBloodFolder()
-    if not folder then
-        folder = Workspace:FindFirstChild("BloodFolder")
-    end
-    return folder
-end
-
-local killerWeapons = BloodDebt.KillerWeapons or {}
-local vigilanteWeapons = BloodDebt.VigilanteWeapons or {}
-local specialKillerWeapons = BloodDebt.SpecialKillerWeapons or {}
-local specificJuggernautWeapons = BloodDebt.SpecificJuggernautWeapons or {}
-local allRoleWeapons = BloodDebt.AllRoleWeapons or {}
-
--- Helper: Get Character Name from NPCSFolder
-local function getCharacterName(targetPlayer)
-    local NPCSFolder = getNPCSFolder()
-    if NPCSFolder then
-        local playerNPCModel = NPCSFolder:FindFirstChild(targetPlayer.Name)
-        if playerNPCModel then
-            local charNameValue = playerNPCModel:FindFirstChild("CharacterName") 
-                or playerNPCModel:FindFirstChild("NPCName")
-                or playerNPCModel:FindFirstChild("Name")
-            
-            if charNameValue and charNameValue:IsA("StringValue") then
-                return charNameValue.Value
-            end
-            
-            local configObject = playerNPCModel:FindFirstChild("Configuration")
-            if configObject then
-                local nameInConfig = configObject:FindFirstChild("CharacterName")
-                    or configObject:FindFirstChild("NPCName")
-                    or configObject:FindFirstChild("Name")
-                
-                if nameInConfig and nameInConfig:IsA("StringValue") then
-                    return nameInConfig.Value
-                end
-            end
-            
-            local humanoid = playerNPCModel:FindFirstChildOfClass("Humanoid")
-            if humanoid and humanoid.DisplayName ~= targetPlayer.Name then
-                return humanoid.DisplayName
-            end
-        end
-    end
-    return targetPlayer.Name
-end
-
--- Helper: Clear old highlights and tags
-local function clearOldStuff(character)
-    if not character then return end
-    local oldHighlight = character:FindFirstChild("RoleHighlight")
-    if oldHighlight and oldHighlight:IsA("Highlight") then
-        oldHighlight:Destroy()
-    end
-    local head = character:FindFirstChild("Head")
-    if head then
-        local tag = head:FindFirstChild("RoleBillboard")
-        if tag then tag:Destroy() end
-    end
-end
-
--- Helper: Add nametag based on mode
-local function addNameTag(character, text, color, targetPlayer)
-    local head = character:FindFirstChild("Head")
-    if not head then return end
-
-    local oldTag = head:FindFirstChild("RoleBillboard")
-    if oldTag then oldTag:Destroy() end
-
-    local displayText = text
-    if BloodDebt.NametagMode == "Username" then
-        displayText = targetPlayer.Name
-    elseif BloodDebt.NametagMode == "Character Name" then
-        displayText = getCharacterName(targetPlayer)
-    end
-
-    local bb = Instance.new("BillboardGui")
-    bb.Name = "RoleBillboard"
-    bb.Size = UDim2.new(0, 100, 0, 20)
-    bb.StudsOffset = Vector3.new(0, 2.5, 0)
-    bb.Adornee = head
-    bb.AlwaysOnTop = true
-    bb.Parent = head
-
-    local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(1, 0, 1, 0)
-    label.BackgroundTransparency = 1
-    label.Text = displayText
-    label.TextColor3 = color
-    label.TextStrokeTransparency = 0.2
-    label.TextScaled = true
-    label.Font = Enum.Font.SourceSansBold
-    label.Parent = bb
-end
-
--- Helper: Tag player with role
-local function tagPlayer(targetPlayer, roleColor, labelText)
-    if not targetPlayer.Character then return end
-    clearOldStuff(targetPlayer.Character)
-
-    local highlight = Instance.new("Highlight", targetPlayer.Character)
-    highlight.Name = "RoleHighlight"
-    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-    highlight.Enabled = true
-    highlight.FillColor = roleColor
-    highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
-    highlight.FillTransparency = 0.5
-    highlight.OutlineTransparency = 0
-
-    if labelText then
-        addNameTag(targetPlayer.Character, labelText, roleColor, targetPlayer)
-    end
-end
-
--- Helper: Collect all tools from player
-local function collectPlayerTools(targetPlayer)
-    local tools = {}
-    local backpack = targetPlayer:FindFirstChildOfClass("Backpack")
-    if backpack then
-        for _, tool in ipairs(backpack:GetChildren()) do
-            if tool:IsA("Tool") then
-                tools[tool.Name] = tool
-            end
-        end
-    end
-    if targetPlayer.Character then
-        for _, tool in ipairs(targetPlayer.Character:GetChildren()) do
-            if tool:IsA("Tool") then
-                tools[tool.Name] = tool
-            end
-        end
-    end
-    
-    local NPCSFolder = getNPCSFolder()
-    if NPCSFolder then
-        local playerNPCModel = NPCSFolder:FindFirstChild(targetPlayer.Name)
-        if playerNPCModel then
-            for _, child in ipairs(playerNPCModel:GetChildren()) do
-                if child:IsA("Tool") then
-                    tools[child.Name] = child
-                end
-            end
-        end
-    end
-    return tools
-end
-
--- Helper: Get role from weapons
-local function getStandardRoleFromWeapons(toolsByName)
-    for weaponName, _ in pairs(killerWeapons) do
-        if not specialKillerWeapons[weaponName] and toolsByName[weaponName] then
-            return "Killer", Color3.fromRGB(255, 0, 0), "KILLER"
-        end
-    end
-    for weaponName, _ in pairs(vigilanteWeapons) do
-        if toolsByName[weaponName] then
-            return "Vigilante", Color3.fromRGB(0, 255, 255), "VIGILANTE"
-        end
-    end
-    return nil, nil, nil
-end
-
--- Helper: Parse hint text
+-- HINT PARSING
 local function parseSingleHint(hintContent)
     local cleanedContent = hintContent:match("^%s*(.-)%s*$") or ""
     if string.len(cleanedContent) == 0 then
@@ -1177,7 +1168,6 @@ local function parseSingleHint(hintContent)
     return "trait", cleanedContent
 end
 
--- Improved hint matching
 local function updateMatchingHintPlayers()
     playersMatchingHints = {}
     if not BloodDebt.RoleESPEnabled then return end
@@ -1287,7 +1277,7 @@ local function updateMatchingHintPlayers()
     end
 end
 
--- Dropped Gun ESP
+-- DROPPED GUN ESP
 local function clearDroppedGunEsp(gunTool)
     if not gunTool then return end
     local old = gunTool:FindFirstChildWhichIsA("Highlight")
@@ -1348,7 +1338,7 @@ local function clearAllDroppedGunEsp()
     end
 end
 
--- Main Role Detection Function
+-- MAIN DETECTION
 function BloodDebt.DetectRoles()
     if not BloodDebt.RoleESPEnabled then return end
     
@@ -1481,16 +1471,193 @@ function BloodDebt.DetectRoles()
     
     updateMatchingHintPlayers()
     
-    local killerColor = Color3.fromRGB(255, 0, 0)
-    local innocentColor = Color3.fromRGB(0, 255, 0)
-    local vigilanteColor = Color3.fromRGB(0, 255, 255)
-    local hintMatchColor = Color3.new(1, 1, 0)
-    local vigilanteHintColor = Color3.fromRGB(128, 0, 128)
-    local killerHintColor = Color3.fromRGB(255, 165, 0)
-    
     for _, targetPlayer in ipairs(Players:GetPlayers()) do
         if playersWithValidChars[targetPlayer] then
             if newHighestPriorityKiller and targetPlayer == theSingleKillerGunHolder then
                 tagPlayer(targetPlayer, killerColor, "KILLER")
             elseif specificJuggernautDetected then
-                i
+                if targetPlayer == theSpecificJuggernautHolder then
+                    tagPlayer(targetPlayer, killerColor, "KILLER")
+                else
+                    local tools = collectPlayerTools(targetPlayer)
+                    local hasWeapon = false
+                    for n, _ in pairs(tools) do if allRoleWeapons[n] then hasWeapon = true break end end
+                    if hasWeapon then
+                        tagPlayer(targetPlayer, vigilanteColor, "VIGILANTE")
+                    else
+                        tagPlayer(targetPlayer, innocentColor, "INNOCENT")
+                    end
+                end
+            elseif specialKillerDetected then
+                if playersWithSpecialWeapons[targetPlayer] then
+                    tagPlayer(targetPlayer, killerColor, "KILLER")
+                else
+                    tagPlayer(targetPlayer, innocentColor, "INNOCENT")
+                end
+            elseif rolesLockedByDistance then
+                local lockedRole = lockedDistanceRoles[targetPlayer]
+                if lockedRole == "Killer" then
+                    tagPlayer(targetPlayer, killerColor, "KILLER")
+                elseif lockedRole == "Innocent" then
+                    tagPlayer(targetPlayer, innocentColor, "INNOCENT")
+                else
+                    clearOldStuff(targetPlayer.Character)
+                end
+            elseif playersMatchingHints[targetPlayer] and playersWithVigilanteWeapons[targetPlayer] then
+                tagPlayer(targetPlayer, vigilanteHintColor, "VIGILANTE + HINT")
+            elseif playersMatchingHints[targetPlayer] and playersWithStandardKillerWeapons[targetPlayer] then
+                tagPlayer(targetPlayer, killerHintColor, "KILLER + HINT")
+            elseif playersMatchingHints[targetPlayer] then
+                tagPlayer(targetPlayer, hintMatchColor, "HINT MATCH")
+            else
+                local tools = collectPlayerTools(targetPlayer)
+                local stdRole, stdColor, stdLabel = getStandardRoleFromWeapons(tools)
+                if stdRole then
+                    tagPlayer(targetPlayer, stdColor, stdLabel)
+                else
+                    tagPlayer(targetPlayer, innocentColor, "INNOCENT")
+                end
+            end
+        else
+            clearOldStuff(targetPlayer.Character)
+        end
+    end
+end
+-- BLOOD DEBT GUI - SECTION 8: ESP Toggle, Teleport & Cleanup
+
+function BloodDebt.EnableRoleESP()
+    if BloodDebt.RoleESPEnabled then return end
+    BloodDebt.RoleESPEnabled = true
+    stopRoleLoop = false
+    
+    task.spawn(function()
+        while BloodDebt.RoleESPEnabled and not stopRoleLoop do
+            task.wait(0.5)
+            updateDroppedGunEsp()
+            BloodDebt.DetectRoles()
+        end
+    end)
+    
+    espPlayerAddedConnection = Players.PlayerAdded:Connect(function(p)
+        local charConn = p.CharacterAdded:Connect(function(char)
+            task.wait(0.1)
+            if BloodDebt.ConnectHintSignal then BloodDebt.ConnectHintSignal() end
+            BloodDebt.DetectRoles()
+        end)
+        espCharacterAddedConnections[p] = charConn
+        if p.Character then
+            task.wait(0.1)
+            BloodDebt.DetectRoles()
+        end
+    end)
+    
+    Players.PlayerRemoving:Connect(function(p)
+        if espCharacterAddedConnections[p] then
+            espCharacterAddedConnections[p]:Disconnect()
+            espCharacterAddedConnections[p] = nil
+        end
+        clearOldStuff(p.Character)
+    end)
+    
+    if BloodDebt.ConnectHintSignal then BloodDebt.ConnectHintSignal() end
+    BloodDebt.DetectRoles()
+    updateDroppedGunEsp()
+end
+
+function BloodDebt.DisableRoleESP()
+    if not BloodDebt.RoleESPEnabled then return end
+    BloodDebt.RoleESPEnabled = false
+    stopRoleLoop = true
+    
+    rolesLockedByDistance = false
+    lockedDistanceRoles = {}
+    playersMatchingHints = {}
+    playersWithStandardKillerWeapons = {}
+    firstVigilanteTracker = {}
+    
+    if espPlayerAddedConnection then
+        espPlayerAddedConnection:Disconnect()
+        espPlayerAddedConnection = nil
+    end
+    
+    if hintTextConnection then
+        hintTextConnection:Disconnect()
+        hintTextConnection = nil
+    end
+    
+    for p, conn in pairs(espCharacterAddedConnections) do
+        if conn then conn:Disconnect() end
+    end
+    espCharacterAddedConnections = {}
+    
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p.Character then clearOldStuff(p.Character) end
+    end
+    clearAllDroppedGunEsp()
+end
+
+function BloodDebt.ConnectHintSignal()
+    if not BloodDebt.RoleESPEnabled then return end
+    if hintTextConnection then hintTextConnection:Disconnect() end
+    
+    local PlayerGui = player:FindFirstChild("PlayerGui")
+    if not PlayerGui then return end
+    
+    local statusGui = PlayerGui:WaitForChild("RESETONDEATHStatusGui", 20)
+    if not statusGui then return end
+    
+    local TargetHintLabel = statusGui:WaitForChild("TARGETHINT", 10)
+    if not TargetHintLabel or not TargetHintLabel:IsA("TextLabel") then return end
+    
+    hintTextConnection = TargetHintLabel:GetPropertyChangedSignal("Text"):Connect(updateMatchingHintPlayers)
+    TargetHintLabel:GetPropertyChangedSignal("Visible"):Connect(updateMatchingHintPlayers)
+    updateMatchingHintPlayers()
+end
+
+function BloodDebt.TeleportToGun()
+    local BloodFolder = getBloodFolder()
+    if not BloodFolder then 
+        warn("BloodFolder not found")
+        return 
+    end
+    
+    local foundGun = false
+    for _, item in ipairs(BloodFolder:GetChildren()) do
+        if item:IsA("Tool") and (killerWeapons[item.Name] or vigilanteWeapons[item.Name] or specialKillerWeapons[item.Name]) then
+            local handle = item:FindFirstChild("Handle")
+            if handle and handle:IsA("BasePart") and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                local targetPos = handle.Position + Vector3.new(0, 5, 0)
+                player.Character:SetPrimaryPartCFrame(CFrame.new(targetPos))
+                foundGun = true
+                break
+            end
+        end
+    end
+    
+    if not foundGun then
+        warn("No valid guns found in BloodFolder")
+    end
+end
+
+-- Cleanup
+local function cleanupConnections()
+    local BloodFolder = getBloodFolder()
+    if BloodFolder then
+        BloodFolder.ChildRemoved:Connect(function(child)
+            if child:IsA("Tool") then
+                clearDroppedGunEsp(child)
+                if droppedGunConnections[child] then
+                    droppedGunConnections[child]:Disconnect()
+                    droppedGunConnections[child] = nil
+                end
+            end
+        end)
+    end
+end
+
+task.spawn(function()
+    wait(5)
+    cleanupConnections()
+end)
+
+print("Blood Debt GUI Loaded")
