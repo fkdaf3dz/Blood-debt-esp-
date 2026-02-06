@@ -277,6 +277,7 @@ BloodDebt.Island.MouseLeave:Connect(function()
     }):Play()
 end)
 -- BLOOD DEBT GUI - SECTION 2: Blood ESP (UNCHANGED)
+
 BloodDebt.SkeletonESP = {
     Enabled = false,
     ESPs = {}
@@ -780,7 +781,6 @@ for i, opt in ipairs(nametagOptions) do
     btn.MouseButton1Click:Connect(function()
         BloodDebt.NametagMode = opt
         Dropdown.Visible = false
-        -- Refresh tags if role ESP is active
         if BloodDebt.RoleESPEnabled and BloodDebt.DetectRoles then
             BloodDebt.DetectRoles()
         end
@@ -984,19 +984,19 @@ local player = Players.LocalPlayer
 
 -- Reference folders from Section 1
 local function getNPCSFolder()
-    local folder = BloodDebt.GetNPCSFolder and BloodDebt.GetNPCSFolder()
-    if not folder then
-        folder = Workspace:FindFirstChild("NPCSFolder")
-    end
-    return folder
+	local folder = BloodDebt.GetNPCSFolder and BloodDebt.GetNPCSFolder()
+	if not folder then
+		folder = Workspace:FindFirstChild("NPCSFolder")
+	end
+	return folder
 end
 
 local function getBloodFolder()
-    local folder = BloodDebt.GetBloodFolder and BloodDebt.GetBloodFolder()
-    if not folder then
-        folder = Workspace:FindFirstChild("BloodFolder")
-    end
-    return folder
+	local folder = BloodDebt.GetBloodFolder and BloodDebt.GetBloodFolder()
+	if not folder then
+		folder = Workspace:FindFirstChild("BloodFolder")
+	end
+	return folder
 end
 
 local killerWeapons = BloodDebt.KillerWeapons or {}
@@ -1007,490 +1007,611 @@ local allRoleWeapons = BloodDebt.AllRoleWeapons or {}
 
 -- Helper: Get Character Name from NPCSFolder
 local function getCharacterName(targetPlayer)
-    local NPCSFolder = getNPCSFolder()
-    if NPCSFolder then
-        local playerNPCModel = NPCSFolder:FindFirstChild(targetPlayer.Name)
-        if playerNPCModel then
-            local charNameValue = playerNPCModel:FindFirstChild("CharacterName") 
-                or playerNPCModel:FindFirstChild("NPCName")
-                or playerNPCModel:FindFirstChild("Name")
-            
-            if charNameValue and charNameValue:IsA("StringValue") then
-                return charNameValue.Value
-            end
-            
-            local configObject = playerNPCModel:FindFirstChild("Configuration")
-            if configObject then
-                local nameInConfig = configObject:FindFirstChild("CharacterName")
-                    or configObject:FindFirstChild("NPCName")
-                    or configObject:FindFirstChild("Name")
-                
-                if nameInConfig and nameInConfig:IsA("StringValue") then
-                    return nameInConfig.Value
-                end
-            end
-            
-            local humanoid = playerNPCModel:FindFirstChildOfClass("Humanoid")
-            if humanoid and humanoid.DisplayName ~= targetPlayer.Name then
-                return humanoid.DisplayName
-            end
-        end
-    end
-    return targetPlayer.Name
+	local NPCSFolder = getNPCSFolder()
+	if NPCSFolder then
+		local playerNPCModel = NPCSFolder:FindFirstChild(targetPlayer.Name)
+		if playerNPCModel then
+			local charNameValue = playerNPCModel:FindFirstChild("CharacterName") 
+				or playerNPCModel:FindFirstChild("NPCName")
+				or playerNPCModel:FindFirstChild("Name")
+			
+			if charNameValue and charNameValue:IsA("StringValue") then
+				return charNameValue.Value
+			end
+			
+			local configObject = playerNPCModel:FindFirstChild("Configuration")
+			if configObject then
+				local nameInConfig = configObject:FindFirstChild("CharacterName")
+					or configObject:FindFirstChild("NPCName")
+					or configObject:FindFirstChild("Name")
+				
+				if nameInConfig and nameInConfig:IsA("StringValue") then
+					return nameInConfig.Value
+				end
+			end
+			
+			local humanoid = playerNPCModel:FindFirstChildOfClass("Humanoid")
+			if humanoid and humanoid.DisplayName ~= targetPlayer.Name then
+				return humanoid.DisplayName
+			end
+		end
+	end
+	return targetPlayer.Name
 end
 
 -- Helper: Clear old highlights and tags
 local function clearOldStuff(character)
-    if not character then return end
-    local oldHighlight = character:FindFirstChild("RoleHighlight")
-    if oldHighlight and oldHighlight:IsA("Highlight") then
-        oldHighlight:Destroy()
-    end
-    local head = character:FindFirstChild("Head")
-    if head then
-        local tag = head:FindFirstChild("RoleBillboard")
-        if tag then tag:Destroy() end
-    end
+	if not character then return end
+	local oldHighlight = character:FindFirstChild("RoleHighlight")
+	if oldHighlight and oldHighlight:IsA("Highlight") then
+		oldHighlight:Destroy()
+	end
+	local head = character:FindFirstChild("Head")
+	if head then
+		local tag = head:FindFirstChild("RoleBillboard")
+		if tag then tag:Destroy() end
+	end
 end
 
 -- Helper: Add nametag based on mode
 local function addNameTag(character, text, color, targetPlayer)
-    local head = character:FindFirstChild("Head")
-    if not head then return end
+	local head = character:FindFirstChild("Head")
+	if not head then return end
 
-    local oldTag = head:FindFirstChild("RoleBillboard")
-    if oldTag then oldTag:Destroy() end
+	local oldTag = head:FindFirstChild("RoleBillboard")
+	if oldTag then oldTag:Destroy() end
 
-    local displayText = text
-    if BloodDebt.NametagMode == "Username" then
-        displayText = targetPlayer.Name
-    elseif BloodDebt.NametagMode == "Character Name" then
-        displayText = getCharacterName(targetPlayer)
-    end
+	local displayText = text
+	if BloodDebt.NametagMode == "Username" then
+		displayText = targetPlayer.Name
+	elseif BloodDebt.NametagMode == "Character Name" then
+		displayText = getCharacterName(targetPlayer)
+	end
 
-    local bb = Instance.new("BillboardGui")
-    bb.Name = "RoleBillboard"
-    bb.Size = UDim2.new(0, 100, 0, 20)
-    bb.StudsOffset = Vector3.new(0, 2.5, 0)
-    bb.Adornee = head
-    bb.AlwaysOnTop = true
-    bb.Parent = head
+	local bb = Instance.new("BillboardGui")
+	bb.Name = "RoleBillboard"
+	bb.Size = UDim2.new(0, 100, 0, 20)
+	bb.StudsOffset = Vector3.new(0, 2.5, 0)
+	bb.Adornee = head
+	bb.AlwaysOnTop = true
+	bb.Parent = head
 
-    local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(1, 0, 1, 0)
-    label.BackgroundTransparency = 1
-    label.Text = displayText
-    label.TextColor3 = color
-    label.TextStrokeTransparency = 0.2
-    label.TextScaled = true
-    label.Font = Enum.Font.SourceSansBold
-    label.Parent = bb
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.new(1, 0, 1, 0)
+	label.BackgroundTransparency = 1
+	label.Text = displayText
+	label.TextColor3 = color
+	label.TextStrokeTransparency = 0.2
+	label.TextScaled = true
+	label.Font = Enum.Font.SourceSansBold
+	label.Parent = bb
 end
 
 -- Helper: Tag player with role
 local function tagPlayer(targetPlayer, roleColor, labelText)
-    if not targetPlayer.Character then return end
-    clearOldStuff(targetPlayer.Character)
+	if not targetPlayer.Character then return end
+	clearOldStuff(targetPlayer.Character)
 
-    local highlight = Instance.new("Highlight", targetPlayer.Character)
-    highlight.Name = "RoleHighlight"
-    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-    highlight.Enabled = true
-    highlight.FillColor = roleColor
-    highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
-    highlight.FillTransparency = 0.5
-    highlight.OutlineTransparency = 0
+	local highlight = Instance.new("Highlight", targetPlayer.Character)
+	highlight.Name = "RoleHighlight"
+	highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+	highlight.Enabled = true
+	highlight.FillColor = roleColor
+	highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+	highlight.FillTransparency = 0.5
+	highlight.OutlineTransparency = 0
 
-    if labelText then
-        addNameTag(targetPlayer.Character, labelText, roleColor, targetPlayer)
-    end
+	if labelText then
+		addNameTag(targetPlayer.Character, labelText, roleColor, targetPlayer)
+	end
 end
 
 -- Helper: Collect all tools from player
 local function collectPlayerTools(targetPlayer)
-    local tools = {}
-    local backpack = targetPlayer:FindFirstChildOfClass("Backpack")
-    if backpack then
-        for _, tool in ipairs(backpack:GetChildren()) do
-            if tool:IsA("Tool") then
-                tools[tool.Name] = tool
-            end
-        end
-    end
-    if targetPlayer.Character then
-        for _, tool in ipairs(targetPlayer.Character:GetChildren()) do
-            if tool:IsA("Tool") then
-                tools[tool.Name] = tool
-            end
-        end
-    end
-    
-    local NPCSFolder = getNPCSFolder()
-    if NPCSFolder then
-        local playerNPCModel = NPCSFolder:FindFirstChild(targetPlayer.Name)
-        if playerNPCModel then
-            for _, child in ipairs(playerNPCModel:GetChildren()) do
-                if child:IsA("Tool") then
-                    tools[child.Name] = child
-                end
-            end
-        end
-    end
-    return tools
+	local tools = {}
+	local backpack = targetPlayer:FindFirstChildOfClass("Backpack")
+	if backpack then
+		for _, tool in ipairs(backpack:GetChildren()) do
+			if tool:IsA("Tool") then
+				tools[tool.Name] = tool
+			end
+		end
+	end
+	if targetPlayer.Character then
+		for _, tool in ipairs(targetPlayer.Character:GetChildren()) do
+			if tool:IsA("Tool") then
+				tools[tool.Name] = tool
+			end
+		end
+	end
+	
+	local NPCSFolder = getNPCSFolder()
+	if NPCSFolder then
+		local playerNPCModel = NPCSFolder:FindFirstChild(targetPlayer.Name)
+		if playerNPCModel then
+			for _, child in ipairs(playerNPCModel:GetChildren()) do
+				if child:IsA("Tool") then
+					tools[child.Name] = child
+				end
+			end
+		end
+	end
+	return tools
 end
 
 -- Helper: Get role from weapons
 local function getStandardRoleFromWeapons(toolsByName)
-    for weaponName, _ in pairs(killerWeapons) do
-        if not specialKillerWeapons[weaponName] and toolsByName[weaponName] then
-            return "Killer", Color3.fromRGB(255, 0, 0), "KILLER"
-        end
-    end
-    for weaponName, _ in pairs(vigilanteWeapons) do
-        if toolsByName[weaponName] then
-            return "Vigilante", Color3.fromRGB(0, 255, 255), "VIGILANTE"
-        end
-    end
-    return nil, nil, nil
+	for weaponName, _ in pairs(killerWeapons) do
+		if not specialKillerWeapons[weaponName] and toolsByName[weaponName] then
+			return "Killer", Color3.fromRGB(255, 0, 0), "KILLER"
+		end
+	end
+	for weaponName, _ in pairs(vigilanteWeapons) do
+		if toolsByName[weaponName] then
+			return "Vigilante", Color3.fromRGB(0, 255, 255), "VIGILANTE"
+		end
+	end
+	return nil, nil, nil
 end
 
 -- Helper: Parse hint text
 local function parseSingleHint(hintContent)
-    local cleanedContent = hintContent:match("^%s*(.-)%s*$") or ""
-    if string.len(cleanedContent) == 0 then
-        return "invalid", nil
-    end
-    
-    local taskMatch = cleanedContent:match("^Is often seen%s*(.*)$")
-    if taskMatch then
-        return "task", taskMatch:match("^%s*(.-)%s*$")
-    end
-    
-    local traitBracketMatch = cleanedContent:match("^%[.-%]$")
-    if traitBracketMatch then
-        local cleanClue = traitBracketMatch:gsub("[%[%]]", ""):match("^%s*(.-)%s*$") or ""
-        if string.len(cleanClue) > 0 and cleanClue:lower() ~= "assigned task" and cleanClue:lower() ~= "seen" then
-            return "trait", cleanClue
-        end
-    end
-    
-    return "trait", cleanedContent
+	local cleanedContent = hintContent:match("^%s*(.-)%s*$") or ""
+	if string.len(cleanedContent) == 0 then
+		return "invalid", nil
+	end
+	
+	local taskMatch = cleanedContent:match("^Is often seen%s*(.*)$")
+	if taskMatch then
+		return "task", taskMatch:match("^%s*(.-)%s*$")
+	end
+	
+	local traitBracketMatch = cleanedContent:match("^%[.-%]$")
+	if traitBracketMatch then
+		local cleanClue = traitBracketMatch:gsub("[%[%]]", ""):match("^%s*(.-)%s*$") or ""
+		if string.len(cleanClue) > 0 and cleanClue:lower() ~= "assigned task" and cleanClue:lower() ~= "seen" then
+			return "trait", cleanClue
+		end
+	end
+	
+	return "trait", cleanedContent
 end
 
 -- Improved hint matching
 local function updateMatchingHintPlayers()
-    playersMatchingHints = {}
-    if not BloodDebt.RoleESPEnabled then return end
-    
-    local PlayerGui = player:FindFirstChild("PlayerGui")
-    if not PlayerGui then return end
-    
-    local TargetHintLabel = PlayerGui:FindFirstChild("RESETONDEATHStatusGui") and PlayerGui.RESETONDEATHStatusGui:FindFirstChild("TARGETHINT")
-    if not TargetHintLabel or not TargetHintLabel:IsA("TextLabel") then return end
-    
-    local hintText = TargetHintLabel.Text
-    if string.len(string.gsub(hintText, "%s", "")) == 0 then return end
-    
-    local hintPrefix = "Hints : "
-    local lowerHintText = string.lower(hintText)
-    if lowerHintText:sub(1, string.len(hintPrefix)) ~= string.lower(hintPrefix) then return end
-    
-    local actualHintContent = hintText:sub(string.len(hintPrefix) + 1):match("^%s*(.-)%s*$")
-    local individualHintParts = {}
-    
-    for part in string.gmatch(actualHintContent, "([^%+]+)") do
-        local clean = part:match("^%s*(.-)%s*$")
-        if clean and #clean > 0 then
-            table.insert(individualHintParts, clean)
-        end
-    end
-    
-    local targetConditions = {}
-    for i, hintPartContent in ipairs(individualHintParts) do
-        local targetNumberMatch = hintPartContent:match("^%[%s*(%d+)%s*%]")
-        local targetNumber = tonumber(targetNumberMatch) or 1
-        local cleanedHintPartContent = hintPartContent:gsub("^%[%s*%d+%s*%]%s*", ""):match("^%s*(.-)%s*$") or ""
-        local hintType, hintValue = parseSingleHint(cleanedHintPartContent)
-        
-        if hintType ~= "invalid" and hintValue and string.len(hintValue) > 0 then
-            if not targetConditions[targetNumber] then targetConditions[targetNumber] = {} end
-            table.insert(targetConditions[targetNumber], { type = hintType, value = hintValue:lower() })
-        end
-    end
-    
-    local NPCSFolder = getNPCSFolder()
-    if not NPCSFolder then return end
-    
-    for _, targetPlayer in ipairs(Players:GetPlayers()) do
-        if targetPlayer ~= player and targetPlayer.Character then
-            local playerNPCModel = NPCSFolder:FindFirstChild(targetPlayer.Name)
-            if playerNPCModel then
-                local matchesThisPlayer = false
-                
-                for targetNum, conditions in pairs(targetConditions) do
-                    local allConditionsMatch = true
-                    
-                    for _, condition in ipairs(conditions) do
-                        local conditionMet = false
-                        
-                        if condition.type == "task" then
-                            local tasksFolder = playerNPCModel:FindFirstChild("Tasks")
-                            if tasksFolder then
-                                for _, taskObj in ipairs(tasksFolder:GetChildren()) do
-                                    if taskObj:IsA("StringValue") then
-                                        local taskText = string.lower(taskObj.Value)
-                                        if string.find(taskText, condition.value, 1, true) then
-                                            conditionMet = true
-                                            break
-                                        end
-                                    end
-                                end
-                            end
-                        elseif condition.type == "trait" then
-                            local traitsFolder = playerNPCModel:FindFirstChild("Traits")
-                            if traitsFolder then
-                                for _, traitObj in ipairs(traitsFolder:GetChildren()) do
-                                    if traitObj:IsA("StringValue") then
-                                        local traitText = string.lower(traitObj.Value)
-                                        if string.find(traitText, condition.value, 1, true) then
-                                            conditionMet = true
-                                            break
-                                        end
-                                    end
-                                end
-                            end
-                            if not conditionMet then
-                                local charName = string.lower(getCharacterName(targetPlayer))
-                                if string.find(charName, condition.value, 1, true) then
-                                    conditionMet = true
-                                end
-                            end
-                        end
-                        
-                        if not conditionMet then
-                            allConditionsMatch = false
-                            break
-                        end
-                    end
-                    
-                    if allConditionsMatch then
-                        matchesThisPlayer = true
-                        break
-                    end
-                end
-                
-                if matchesThisPlayer then
-                    playersMatchingHints[targetPlayer] = true
-                end
-            end
-        end
-    end
+	playersMatchingHints = {}
+	if not BloodDebt.RoleESPEnabled then return end
+	
+	local PlayerGui = player:FindFirstChild("PlayerGui")
+	if not PlayerGui then return end
+	
+	local TargetHintLabel = PlayerGui:FindFirstChild("RESETONDEATHStatusGui") and PlayerGui.RESETONDEATHStatusGui:FindFirstChild("TARGETHINT")
+	if not TargetHintLabel or not TargetHintLabel:IsA("TextLabel") then return end
+	
+	local hintText = TargetHintLabel.Text
+	if string.len(string.gsub(hintText, "%s", "")) == 0 then return end
+	
+	local hintPrefix = "Hints : "
+	local lowerHintText = string.lower(hintText)
+	if lowerHintText:sub(1, string.len(hintPrefix)) ~= string.lower(hintPrefix) then return end
+	
+	local actualHintContent = hintText:sub(string.len(hintPrefix) + 1):match("^%s*(.-)%s*$")
+	local individualHintParts = {}
+	
+	for part in string.gmatch(actualHintContent, "([^%+]+)") do
+		local clean = part:match("^%s*(.-)%s*$")
+		if clean and #clean > 0 then
+			table.insert(individualHintParts, clean)
+		end
+	end
+	
+	local targetConditions = {}
+	for i, hintPartContent in ipairs(individualHintParts) do
+		local targetNumberMatch = hintPartContent:match("^%[%s*(%d+)%s*%]")
+		local targetNumber = tonumber(targetNumberMatch) or 1
+		local cleanedHintPartContent = hintPartContent:gsub("^%[%s*%d+%s*%]%s*", ""):match("^%s*(.-)%s*$") or ""
+		local hintType, hintValue = parseSingleHint(cleanedHintPartContent)
+		
+		if hintType ~= "invalid" and hintValue and string.len(hintValue) > 0 then
+			if not targetConditions[targetNumber] then targetConditions[targetNumber] = {} end
+			table.insert(targetConditions[targetNumber], { type = hintType, value = hintValue:lower() })
+		end
+	end
+	
+	local NPCSFolder = getNPCSFolder()
+	if not NPCSFolder then return end
+	
+	for _, targetPlayer in ipairs(Players:GetPlayers()) do
+		if targetPlayer ~= player and targetPlayer.Character then
+			local playerNPCModel = NPCSFolder:FindFirstChild(targetPlayer.Name)
+			if playerNPCModel then
+				local matchesThisPlayer = false
+				
+				for targetNum, conditions in pairs(targetConditions) do
+					local allConditionsMatch = true
+					
+					for _, condition in ipairs(conditions) do
+						local conditionMet = false
+						
+						if condition.type == "task" then
+							local tasksFolder = playerNPCModel:FindFirstChild("Tasks")
+							if tasksFolder then
+								for _, taskObj in ipairs(tasksFolder:GetChildren()) do
+									if taskObj:IsA("StringValue") then
+										local taskText = string.lower(taskObj.Value)
+										if string.find(taskText, condition.value, 1, true) then
+											conditionMet = true
+											break
+										end
+									end
+								end
+							end
+						elseif condition.type == "trait" then
+							local traitsFolder = playerNPCModel:FindFirstChild("Traits")
+							if traitsFolder then
+								for _, traitObj in ipairs(traitsFolder:GetChildren()) do
+									if traitObj:IsA("StringValue") then
+										local traitText = string.lower(traitObj.Value)
+										if string.find(traitText, condition.value, 1, true) then
+											conditionMet = true
+											break
+										end
+									end
+								end
+							end
+							if not conditionMet then
+								local charName = string.lower(getCharacterName(targetPlayer))
+								if string.find(charName, condition.value, 1, true) then
+									conditionMet = true
+								end
+							end
+						end
+						
+						if not conditionMet then
+							allConditionsMatch = false
+							break
+						end
+					end
+					
+					if allConditionsMatch then
+						matchesThisPlayer = true
+						break
+					end
+				end
+				
+				if matchesThisPlayer then
+					playersMatchingHints[targetPlayer] = true
+				end
+			end
+		end
+	end
 end
 
 -- Dropped Gun ESP
 local function clearDroppedGunEsp(gunTool)
-    if not gunTool then return end
-    local old = gunTool:FindFirstChildWhichIsA("Highlight")
-    if old then old:Destroy() end
+	if not gunTool then return end
+	local old = gunTool:FindFirstChildWhichIsA("Highlight")
+	if old then old:Destroy() end
 end
 
 local function addDroppedGunEsp(gunTool)
-    if not gunTool or not gunTool:IsA("Tool") then return end
-    clearDroppedGunEsp(gunTool)
-    
-    local highlight = Instance.new("Highlight")
-    highlight.Name = "DroppedGunHighlight"
-    highlight.Adornee = gunTool
-    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-    highlight.FillColor = Color3.fromRGB(255, 255, 0)
-    highlight.FillTransparency = 0.4
-    highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
-    highlight.OutlineTransparency = 0
-    highlight.Parent = gunTool
+	if not gunTool or not gunTool:IsA("Tool") then return end
+	clearDroppedGunEsp(gunTool)
+	
+	local highlight = Instance.new("Highlight")
+	highlight.Name = "DroppedGunHighlight"
+	highlight.Adornee = gunTool
+	highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+	highlight.FillColor = Color3.fromRGB(255, 255, 0)
+	highlight.FillTransparency = 0.4
+	highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+	highlight.OutlineTransparency = 0
+	highlight.Parent = gunTool
 end
 
 local function updateDroppedGunEsp()
-    if not BloodDebt.RoleESPEnabled then return end
-    local BloodFolder = getBloodFolder()
-    if not BloodFolder then return end
-    
-    for _, obj in ipairs(BloodFolder:GetChildren()) do
-        if obj:IsA("Tool") then
-            local weaponName = obj.Name
-            if killerWeapons[weaponName] or vigilanteWeapons[weaponName] or specialKillerWeapons[weaponName] then
-                addDroppedGunEsp(obj)
-                if not droppedGunConnections[obj] then
-                    droppedGunConnections[obj] = obj.AncestryChanged:Connect(function()
-                        if not obj.Parent then
-                            clearDroppedGunEsp(obj)
-                            droppedGunConnections[obj]:Disconnect()
-                            droppedGunConnections[obj] = nil
-                        end
-                    end)
-                end
-            end
-        end
-    end
+	if not BloodDebt.RoleESPEnabled then return end
+	local BloodFolder = getBloodFolder()
+	if not BloodFolder then return end
+	
+	for _, obj in ipairs(BloodFolder:GetChildren()) do
+		if obj:IsA("Tool") then
+			local weaponName = obj.Name
+			if killerWeapons[weaponName] or vigilanteWeapons[weaponName] or specialKillerWeapons[weaponName] then
+				addDroppedGunEsp(obj)
+				if not droppedGunConnections[obj] then
+					droppedGunConnections[obj] = obj.AncestryChanged:Connect(function()
+						if not obj.Parent then
+							clearDroppedGunEsp(obj)
+							droppedGunConnections[obj]:Disconnect()
+							droppedGunConnections[obj] = nil
+						end
+					end)
+				end
+			end
+		end
+	end
 end
 
 local function clearAllDroppedGunEsp()
-    local BloodFolder = getBloodFolder()
-    if BloodFolder then
-        for _, obj in BloodFolder:GetChildren() do
-            if obj:IsA("Tool") then
-                clearDroppedGunEsp(obj)
-            end
-        end
-    end
-    for tool, conn in pairs(droppedGunConnections) do
-        if conn and conn.Connected then conn:Disconnect() end
-        droppedGunConnections[tool] = nil
-    end
+	local BloodFolder = getBloodFolder()
+	if BloodFolder then
+		for _, obj in BloodFolder:GetChildren() do
+			if obj:IsA("Tool") then
+				clearDroppedGunEsp(obj)
+			end
+		end
+	end
+	for tool, conn in pairs(droppedGunConnections) do
+		if conn and conn.Connected then conn:Disconnect() end
+		droppedGunConnections[tool] = nil
+	end
 end
 
 -- Main Role Detection Function
 function BloodDebt.DetectRoles()
-    if not BloodDebt.RoleESPEnabled then return end
-    
-    local everyoneHasGun = false
-    local noOneHasGun = false
-    local newHighestPriorityKiller = false
-    local theSingleKillerGunHolder = nil
-    local specificJuggernautDetected = false
-    local theSpecificJuggernautHolder = nil
-    local specialKillerDetected = false
-    local playersWithSpecialWeapons = {}
-    local playersWithValidChars = {}
-    local playersWithoutAnyGun = {}
-    local playersWithAnyGun = {}
-    local playersWithVigilanteWeapons = {}
-    playersWithStandardKillerWeapons = {}
-    local vigilanteCount = 0
-    local killerGunHoldersCount = 0
-    local singleKillerCandidate = nil
+	if not BloodDebt.RoleESPEnabled then return end
+	
+	local everyoneHasGun = false
+	local noOneHasGun = false
+	local newHighestPriorityKiller = false
+	local theSingleKillerGunHolder = nil
+	local specificJuggernautDetected = false
+	local theSpecificJuggernautHolder = nil
+	local specialKillerDetected = false
+	local playersWithSpecialWeapons = {}
+	local playersWithValidChars = {}
+	local playersWithoutAnyGun = {}
+	local playersWithAnyGun = {}
+	local playersWithVigilanteWeapons = {}
+	playersWithStandardKillerWeapons = {}
+	local vigilanteCount = 0
+	local killerGunHoldersCount = 0
+	local singleKillerCandidate = nil
 
-    for _, targetPlayer in ipairs(Players:GetPlayers()) do
-        if targetPlayer ~= player and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
-            playersWithValidChars[targetPlayer] = true
-            
-            local toolsByName = collectPlayerTools(targetPlayer)
-            local hasAnyRoleWeapon = false
-            local hasVigilanteWeapon = false
-            local hasKillerWeapon = false
-            
-            for name, _ in pairs(toolsByName) do
-                if specialKillerWeapons[name] then
-                    specialKillerDetected = true
-                    playersWithSpecialWeapons[targetPlayer] = true
-                    if specificJuggernautWeapons[name] then
-                        specificJuggernautDetected = true
-                        theSpecificJuggernautHolder = targetPlayer
-                    end
-                end
-                if allRoleWeapons[name] then hasAnyRoleWeapon = true end
-                if vigilanteWeapons[name] then 
-                    hasVigilanteWeapon = true 
-                    playersWithVigilanteWeapons[targetPlayer] = true
-                end
-                if killerWeapons[name] then 
-                    hasKillerWeapon = true 
-                    if not specialKillerWeapons[name] then
-                        playersWithStandardKillerWeapons[targetPlayer] = true
-                    end
-                end
-            end
-            
-            if hasVigilanteWeapon then
-                vigilanteCount = vigilanteCount + 1
-                if firstVigilanteTracker[targetPlayer] == nil then
-                    firstVigilanteTracker[targetPlayer] = true
-                end
-            end
-            
-            if hasKillerWeapon then
-                killerGunHoldersCount = killerGunHoldersCount + 1
-                singleKillerCandidate = targetPlayer
-            end
-            
-            if not hasAnyRoleWeapon then
-                playersWithoutAnyGun[targetPlayer] = true
-            else
-                playersWithAnyGun[targetPlayer] = true
-            end
-        else
-            clearOldStuff(targetPlayer.Character)
-        end
-    end
-    
-    if vigilanteCount == 1 and killerGunHoldersCount == 1 and singleKillerCandidate then
-        newHighestPriorityKiller = true
-        theSingleKillerGunHolder = singleKillerCandidate
-        specialKillerDetected = false
-        specificJuggernautDetected = false
-        rolesLockedByDistance = false
-        lockedDistanceRoles = {}
-        
-        if theSingleKillerGunHolder == player then
-            updateMatchingHintPlayers()
-        end
-    end
-    
-    local otherPlayersCount = 0
-    for _ in pairs(playersWithValidChars) do otherPlayersCount = otherPlayersCount + 1 end
-    
-    local allHaveGun = true
-    for p, _ in pairs(playersWithValidChars) do
-        if playersWithoutAnyGun[p] then allHaveGun = false break end
-    end
-    if allHaveGun and otherPlayersCount > 0 then everyoneHasGun = true end
-    
-    local anyHasGun = false
-    for p, _ in pairs(playersWithValidChars) do
-        if playersWithAnyGun[p] then anyHasGun = true break end
-    end
-    if not anyHasGun and otherPlayersCount > 0 then noOneHasGun = true end
-    
-    local higherPriorityActive = newHighestPriorityKiller or specificJuggernautDetected or specialKillerDetected
-    
-    if not higherPriorityActive then
-        if everyoneHasGun and not rolesLockedByDistance then
-            rolesLockedByDistance = true
-            lockedDistanceRoles = {}
-            local localHRP = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-            if localHRP then
-                for p, _ in pairs(playersWithValidChars) do
-                    local playerHRP = p.Character:FindFirstChild("HumanoidRootPart")
-                    if playerHRP then
-                        local distance = (localHRP.Position - playerHRP.Position).Magnitude
-                        lockedDistanceRoles[p] = (distance >= distanceThreshold) and "Killer" or "Innocent"
-                    end
-                end
-            else
-                rolesLockedByDistance = false
-            end
-        elseif noOneHasGun and rolesLockedByDistance then
-            rolesLockedByDistance = false
-            lockedDistanceRoles = {}
-        end
-    else
-        if rolesLockedByDistance then
-            rolesLockedByDistance = false
-            lockedDistanceRoles = {}
-        end
-    end
-    
-    updateMatchingHintPlayers()
-    
-    local killerColor = Color3.fromRGB(255, 0, 0)
-    local innocentColor = Color3.fromRGB(0, 255, 0)
-    local vigilanteColor = Color3.fromRGB(0, 255, 255)
-    local hintMatchColor = Color3.new(1, 1, 0)
-    local vigilanteHintColor = Color3.fromRGB(128, 0, 128)
-    local killerHintColor = Color3.fromRGB(255, 165, 0)
-    
-    for _, targetPlayer in ipairs(Players:GetPlayers()) do
-        if playersWithValidChars[targetPlayer] then
-            if newHighestPriorityKiller and targetPlayer == theSingleKillerGunHolder then
-                tagPlayer(targetPlayer, killerColor, "KILLER")
-            elseif specificJuggernautDetected then
-                i
+	for _, targetPlayer in ipairs(Players:GetPlayers()) do
+		if targetPlayer ~= player and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
+			playersWithValidChars[targetPlayer] = true
+			
+			local toolsByName = collectPlayerTools(targetPlayer)
+			local hasAnyRoleWeapon = false
+			local hasVigilanteWeapon = false
+			local hasKillerWeapon = false
+			
+			for name, _ in pairs(toolsByName) do
+				if specialKillerWeapons[name] then
+					specialKillerDetected = true
+					playersWithSpecialWeapons[targetPlayer] = true
+					if specificJuggernautWeapons[name] then
+						specificJuggernautDetected = true
+						theSpecificJuggernautHolder = targetPlayer
+					end
+				end
+				if allRoleWeapons[name] then hasAnyRoleWeapon = true end
+				if vigilanteWeapons[name] then 
+					hasVigilanteWeapon = true 
+					playersWithVigilanteWeapons[targetPlayer] = true
+				end
+				if killerWeapons[name] then 
+					hasKillerWeapon = true 
+					if not specialKillerWeapons[name] then
+						playersWithStandardKillerWeapons[targetPlayer] = true
+					end
+				end
+			end
+			
+			if hasVigilanteWeapon then
+				vigilanteCount = vigilanteCount + 1
+				if firstVigilanteTracker[targetPlayer] == nil then
+					firstVigilanteTracker[targetPlayer] = true
+				end
+			end
+			
+			if hasKillerWeapon then
+				killerGunHoldersCount = killerGunHoldersCount + 1
+				singleKillerCandidate = targetPlayer
+			end
+			
+			if not hasAnyRoleWeapon then
+				playersWithoutAnyGun[targetPlayer] = true
+			else
+				playersWithAnyGun[targetPlayer] = true
+			end
+		else
+			clearOldStuff(targetPlayer.Character)
+		end
+	end
+	
+	if vigilanteCount == 1 and killerGunHoldersCount == 1 and singleKillerCandidate then
+		newHighestPriorityKiller = true
+		theSingleKillerGunHolder = singleKillerCandidate
+		specialKillerDetected = false
+		specificJuggernautDetected = false
+		rolesLockedByDistance = false
+		lockedDistanceRoles = {}
+		
+		if theSingleKillerGunHolder == player then
+			updateMatchingHintPlayers()
+		end
+	end
+	
+	local otherPlayersCount = 0
+	for _ in pairs(playersWithValidChars) do otherPlayersCount = otherPlayersCount + 1 end
+	
+	local allHaveGun = true
+	for p, _ in pairs(playersWithValidChars) do
+		if playersWithoutAnyGun[p] then allHaveGun = false break end
+	end
+	if allHaveGun and otherPlayersCount > 0 then everyoneHasGun = true end
+	
+	local anyHasGun = false
+	for p, _ in pairs(playersWithValidChars) do
+		if playersWithAnyGun[p] then anyHasGun = true break end
+	end
+	if not anyHasGun and otherPlayersCount > 0 then noOneHasGun = true end
+	
+	local higherPriorityActive = newHighestPriorityKiller or specificJuggernautDetected or specialKillerDetected
+	
+	if not higherPriorityActive then
+		if everyoneHasGun and not rolesLockedByDistance then
+			rolesLockedByDistance = true
+			lockedDistanceRoles = {}
+			local localHRP = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+			if localHRP then
+				for p, _ in pairs(playersWithValidChars) do
+					local playerHRP = p.Character:FindFirstChild("HumanoidRootPart")
+					if playerHRP then
+						local distance = (localHRP.Position - playerHRP.Position).Magnitude
+						lockedDistanceRoles[p] = (distance >= distanceThreshold) and "Killer" or "Innocent"
+					end
+				end
+			else
+				rolesLockedByDistance = false
+			end
+		elseif noOneHasGun and rolesLockedByDistance then
+			rolesLockedByDistance = false
+			lockedDistanceRoles = {}
+		end
+	else
+		if rolesLockedByDistance then
+			rolesLockedByDistance = false
+			lockedDistanceRoles = {}
+		end
+	end
+	
+	updateMatchingHintPlayers()
+	
+	local killerColor = Color3.fromRGB(255, 0, 0)
+	local innocentColor = Color3.fromRGB(0, 255, 0)
+	local vigilanteColor = Color3.fromRGB(0, 255, 255)
+	local hintMatchColor = Color3.new(1, 1, 0)
+	local vigilanteHintColor = Color3.fromRGB(128, 0, 128)
+	local killerHintColor = Color3.fromRGB(255, 165, 0)
+	
+	for _, targetPlayer in ipairs(Players:GetPlayers()) do
+		if playersWithValidChars[targetPlayer] then
+			if newHighestPriorityKiller and targetPlayer == theSingleKillerGunHolder then
+				tagPlayer(targetPlayer, killerColor, "KILLER")
+			elseif specificJuggernautDetected then
+				if targetPlayer == theSpecificJuggernautHolder then
+					tagPlayer(targetPlayer, killerColor, "KILLER")
+				else
+					local tools = collectPlayerTools(targetPlayer)
+					local hasWeapon = false
+					for n, _ in pairs(tools) do if allRoleWeapons[n] then hasWeapon = true break end end
+					if hasWeapon then
+						tagPlayer(targetPlayer, vigilanteColor, "VIGILANTE")
+					else
+						tagPlayer(targetPlayer, innocentColor, "INNOCENT")
+					end
+				end
+			elseif specialKillerDetected then
+				if playersWithSpecialWeapons[targetPlayer] then
+					tagPlayer(targetPlayer, killerColor, "KILLER")
+				else
+					tagPlayer(targetPlayer, innocentColor, "INNOCENT")
+				end
+			elseif rolesLockedByDistance then
+				local lockedRole = lockedDistanceRoles[targetPlayer]
+				if lockedRole == "Killer" then
+					tagPlayer(targetPlayer, killerColor, "KILLER")
+				elseif lockedRole == "Innocent" then
+					tagPlayer(targetPlayer, innocentColor, "INNOCENT")
+				else
+					clearOldStuff(targetPlayer.Character)
+				end
+			elseif playersMatchingHints[targetPlayer] and playersWithVigilanteWeapons[targetPlayer] then
+				tagPlayer(targetPlayer, vigilanteHintColor, "VIGILANTE + HINT")
+			elseif playersMatchingHints[targetPlayer] and playersWithStandardKillerWeapons[targetPlayer] then
+				tagPlayer(targetPlayer, killerHintColor, "KILLER + HINT")
+			elseif playersMatchingHints[targetPlayer] then
+				tagPlayer(targetPlayer, hintMatchColor, "HINT MATCH")
+			else
+				local tools = collectPlayerTools(targetPlayer)
+				local stdRole, stdColor, stdLabel = getStandardRoleFromWeapons(tools)
+				if stdRole then
+					tagPlayer(targetPlayer, stdColor, stdLabel)
+				else
+					tagPlayer(targetPlayer, innocentColor, "INNOCENT")
+				end
+			end
+		else
+			clearOldStuff(targetPlayer.Character)
+		end
+	end
+end
+
+-- Enable/Disable Role ESP
+function BloodDebt.EnableRoleESP()
+	if BloodDebt.RoleESPEnabled then return end
+	BloodDebt.RoleESPEnabled = true
+	stopRoleLoop = false
+	
+	task.spawn(function()
+		while BloodDebt.RoleESPEnabled and not stopRoleLoop do
+			task.wait(0.5)
+			updateDroppedGunEsp()
+			BloodDebt.DetectRoles()
+		end
+	end)
+	
+	espPlayerAddedConnection = Players.PlayerAdded:Connect(function(p)
+		local charConn = p.CharacterAdded:Connect(function(char)
+			task.wait(0.1)
+			if BloodDebt.ConnectHintSignal then BloodDebt.ConnectHintSignal() end
+			BloodDebt.DetectRoles()
+		end)
+		espCharacterAddedConnections[p] = charConn
+		if p.Character then
+			task.wait(0.1)
+			BloodDebt.DetectRoles()
+		end
+	end)
+	
+	Players.PlayerRemoving:Connect(function(p)
+		if espCharacterAddedConnections[p] then
+			espCharacterAddedConnections[p]:Disconnect()
+			espCharacterAddedConnections[p] = nil
+		end
+		clearOldStuff(p.Character)
+	end)
+	
+	if BloodDebt.ConnectHintSignal then BloodDebt.ConnectHintSignal() end
+	BloodDebt.DetectRoles()
+	updateDroppedGunEsp()
+end
+
+function BloodDebt.DisableRoleESP()
+	if not BloodDebt.RoleESPEnabled then return end
+	BloodDebt.RoleESPEnabled = false
+	stopRoleLoop = true
+	
+	rolesLockedByDistance = false
+	lockedDistanceRoles = {}
+	playersMatchingHints = {}
+	playersWithStandardKillerWeapons = {}
+	firstVigilanteTracker = {}
+	
+	if espPlayerAddedConnection then
+		espPlayerAddedConnection:Disconnect()
+		espPlayerAddedConnection = nil
+	end
+	
+	if hintTextConnection then
+		hintTextConnection:Disconnect()
+		hintTextConnection = nil
+	end
+	
+	for p, conn in pairs(espCharacterAddedConnections) do
+		if conn then conn:Disconnect() end
+	end
+	espCharacterAddedConnections = {}
+	
+	for _, p in ipairs(Players:GetPlayers()) do
+		if p.Character then clearOldStuff(p.Character) end
+	end
+	clearAllDroppedGunEsp()
+end
+
+-- Connect Hint Signal
+function BloodDebt.ConnectHintSigna
